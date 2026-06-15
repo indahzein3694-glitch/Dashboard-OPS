@@ -28,48 +28,44 @@ url = "https://docs.google.com/spreadsheets/d/1-8ySRDAkrbbBMjBEiW3hXsNN3BMFe0OnW
 
 @st.cache_data
 def load_data_asg_final():
-    df = pd.read_csv(url)
+    df = pd.read_csv(url, low_memory=False)
     df = df.dropna(how='all')
     
-    # Bersihkan spasi di nama kolom tanpa mengubah huruf besar/kecil asli Excel kamu
-    df.columns = [str(col).strip() for col in df.columns]
+    # Bersihkan nama kolom menjadi HURUF BESAR SEMUA
+    df.columns = [str(col).strip().upper() for col in df.columns]
     
-    # Konversi data angka TARIF secara aman
-    if 'TARIF' in df.columns:
-        df['TARIF_NUM'] = pd.to_numeric(df['TARIF'], errors='coerce').fillna(0)
+    # KUNCI POSISI KOLOM SECARA PAS DAN AKURAT
+    # 1. TOTAL VALUE diisi ke Sales/Tarif (Uang Miliaran)
+    if 'TOTAL VALUE' in df.columns:
+        df['TARIF_NUM'] = pd.to_numeric(df['TOTAL VALUE'], errors='coerce').fillna(0)
     else:
         df['TARIF_NUM'] = 0
         
+    # 2. Jarak Kilometer diisi dari kolom KILOMETER atau KM asli (Jika tidak ada, diset 0 secara aman)
     if 'KILOMETER' in df.columns:
         df['KM_NUM'] = pd.to_numeric(df['KILOMETER'], errors='coerce').fillna(0)
+    elif 'KM' in df.columns:
+        df['KM_NUM'] = pd.to_numeric(df['KM'], errors='coerce').fillna(0)
     else:
         df['KM_NUM'] = 0
         
-    # --- MEMBERSIHKAN FORMAT TANGGAL/BULAN/TAHUN GAIB DARI EXCEL ---
-    # Fungsi pembantu untuk mengubah "2026.0" atau "1.0" menjadi "2026" atau "1" secara paksa
-    def clean_date_values(series):
-        # Konversi ke numeric dulu, hilangkan NaN dengan 0, ubah ke integer, lalu balikkan ke string teks biasa
-        return pd.to_numeric(series, errors='coerce').fillna(0).astype(int).astype(str)
-
-    if 'YEAR' in df.columns:
-        df['YEAR_CLEAN'] = clean_date_values(df['YEAR'])
-    else:
-        df['YEAR_CLEAN'] = "2026"
-        
-    if 'MONTH' in df.columns:
-        df['MONTH_CLEAN'] = clean_date_values(df['MONTH'])
-    else:
-        df['MONTH_CLEAN'] = "1"
-        
-    if 'DATE' in df.columns:
-        df['DATE_CLEAN'] = clean_date_values(df['DATE'])
-    else:
-        df['DATE_CLEAN'] = "1"
-        
-    if 'STORE' in df.columns:
-        df['STORE_CLEAN'] = df['STORE'].astype(str).str.strip()
+    # 3. Kolom Toko diambil dari DESTINATION
+    if 'DESTINATION' in df.columns:
+        df['STORE_CLEAN'] = df['DESTINATION'].astype(str).str.strip()
     else:
         df['STORE_CLEAN'] = "UNKNOWN"
+        
+    # 4. Plat Nomor
+    df['NOPOL_CLEAN'] = df['NOPOL'].astype(str).str.strip().str.upper() if 'NOPOL' in df.columns else "UNKNOWN"
+
+    # 5. Filter Tanggal
+    df['YEAR_CLEAN'] = pd.to_numeric(df['YEAR'], errors='coerce').fillna(2026).astype(int).astype(str) if 'YEAR' in df.columns else "2026"
+    df['MONTH_CLEAN'] = pd.to_numeric(df['MONTH'], errors='coerce').fillna(1).astype(int).astype(str) if 'MONTH' in df.columns else "1"
+    df['DATE_CLEAN'] = pd.to_numeric(df['DATE'], errors='coerce').fillna(1).astype(int).astype(str) if 'DATE' in df.columns else "1"
+    
+    # Bersihkan baris kotor
+    df = df[df['STORE_CLEAN'].str.upper() != 'DESTINATION']
+    df = df[df['STORE_CLEAN'] != 'nan']
         
     return df
 
@@ -83,42 +79,30 @@ except Exception as e:
 # =======================================================
 # 3. SIDEBAR UTAMA & PEMBERIAN FILTER
 # =======================================================
-st.sidebar.image("https://asg-express.com/wp-content/uploads/2022/01/logo-asg-1.png", width=150)
-st.sidebar.markdown("<br>", unsafe_allow_html=True)
-
 st.sidebar.markdown("### 🗂️ NAVIGASI MENU")
-pilihan_menu = st.sidebar.radio(
-    "Pilih Halaman:",
-    options=["Dashboard Utama", "Laporan Operasional Toko"]
-)
+pilihan_menu = st.sidebar.radio("Pilih Halaman:", options=["Dashboard Utama", "Laporan Operasional Toko"])
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🔍 FILTER DATA GLOBAL")
 
-# Filter TAHUN (YEAR)
 list_year = sorted([y for y in df['YEAR_CLEAN'].unique() if y != '0' and y != 'nan'])
 selected_year = st.sidebar.multiselect("YEAR", options=list_year, default=list_year)
 
-# Filter BULAN (MONTH)
 list_month = sorted([m for m in df['MONTH_CLEAN'].unique() if m != '0' and m != 'nan'], key=lambda x: int(x) if x.isdigit() else 0)
 selected_month = st.sidebar.multiselect("MONTH", options=list_month, default=list_month)
 
-# Filter TANGGAL (DATE)
 list_date = sorted([d for d in df['DATE_CLEAN'].unique() if d != '0' and d != 'nan'], key=lambda x: int(x) if x.isdigit() else 0)
 selected_date = st.sidebar.multiselect("DATE (Tanggal)", options=list_date, default=list_date)
 
-# Filter TOKO (STORE)
 list_store = sorted([s for s in df['STORE_CLEAN'].unique() if s != 'nan' and s != 'None'])
 selected_store = st.sidebar.multiselect("STORE (Toko/Cabang)", options=list_store, default=list_store)
 
-# JALANKAN PROSES FILTERING DATA SECARA AMAN
 df_filtered = df[
     (df['YEAR_CLEAN'].isin(selected_year)) &
     (df['MONTH_CLEAN'].isin(selected_month)) &
     (df['DATE_CLEAN'].isin(selected_date)) &
     (df['STORE_CLEAN'].isin(selected_store))
 ]
-
 
 def format_id(angka):
     return f"{angka:,.0f}".replace(",", ".")
@@ -140,7 +124,7 @@ if pilihan_menu == "Dashboard Utama":
         with col1:
             st.markdown(f"<div class='metric-card'><div class='metric-title'>Total Ritase</div><div class='metric-value'>{format_id(total_ritase)}</div><p style='color: #64748b; font-size: 11px; margin-top:5px;'>Count Order</p></div>", unsafe_allow_html=True)
         with col2:
-            st.markdown(f"<div class='metric-card'><div class='metric-title'>Total Sales (Tarif)</div><div class='metric-value'>Rp {format_id(df_filtered['TARIF_NUM'].sum())}</div><p style='color: #64748b; font-size: 11px; margin-top:5px;'>Sum Tarif</p></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='metric-card'><div class='metric-title'>Total Sales (Tarif)</div><div class='metric-value'>Rp {format_id(df_filtered['TARIF_NUM'].sum())}</div><p style='color: #64748b; font-size: 11px; margin-top:5px;'>Sum TOTAL VALUE</p></div>", unsafe_allow_html=True)
         with col3:
             st.markdown(f"<div class='metric-card'><div class='metric-title'>Total Kilometer</div><div class='metric-value'>{format_id(df_filtered['KM_NUM'].sum())} KM</div><p style='color: #64748b; font-size: 11px; margin-top:5px;'>Sum Kilometer</p></div>", unsafe_allow_html=True)
             
@@ -169,11 +153,11 @@ if pilihan_menu == "Dashboard Utama":
             fig2.update_layout(**cfg)
             st.plotly_chart(fig2, use_container_width=True)
     else:
-        st.warning("⚠️ Data hasil filter kosong. Silakan pilih/centang item filter di sidebar kiri.")
+        st.warning("⚠️ Data hasil filter kosong. Silakan sesuaikan filter di sidebar kiri.")
 
 
 # =======================================================
-# KONDISI 2: LAPORAN OPERASIONAL TOKO (RITASE, ACH SALES, MOBIL JALAN)
+# KONDISI 2: LAPORAN OPERASIONAL TOKO
 # =======================================================
 elif pilihan_menu == "Laporan Operasional Toko":
     st.markdown("<h2 style='color: #1e3a8a; font-family: sans-serif; margin-bottom: 5px;'>LAPORAN OPERASIONAL PER TOKO</h2>", unsafe_allow_html=True)
@@ -181,44 +165,43 @@ elif pilihan_menu == "Laporan Operasional Toko":
     st.markdown("<hr>", unsafe_allow_html=True)
     
     if not df_filtered.empty:
-        # 1. Hitung Rata-rata Ritase harian per store
         df_ritase_harian = df_filtered.groupby(['STORE_CLEAN', 'DATE_CLEAN']).size().reset_index(name='RITASE_HARI')
         df_avg_ritase = df_ritase_harian.groupby('STORE_CLEAN')['RITASE_HARI'].mean().reset_index(name='AVG_RITASE')
         
-        # 2. Hitung Total sales & Mobil unik (by NOPOL) per store
-        nopol_col = 'NOPOL' if 'NOPOL' in df_filtered.columns else (df_filtered.columns[0])
         df_store_summary = df_filtered.groupby('STORE_CLEAN').agg(
             TOTAL_SALES=('TARIF_NUM', 'sum'),
-            JUMLAH_MOBIL=(nopol_col, 'nunique')
+            JUMLAH_MOBIL=('NOPOL_CLEAN', 'nunique')
         ).reset_index()
         
         df_report_toko = pd.merge(df_avg_ritase, df_store_summary, on='STORE_CLEAN')
         
-        # 3. Hitung Ach Sales (%) -> Target rata-rata diset Rp 50.000.000 per toko
         ASUMSI_TARGET = 50000000
         df_report_toko['ACH_SALES'] = (df_report_toko['TOTAL_SALES'] / ASUMSI_TARGET) * 100
         
-        # 4. Baris Total Akumulasi Terbawah (Grand Total)
-        grand_total = pd.DataFrame([{
+        avg_ritase_total = df_report_toko['AVG_RITASE'].mean() if not df_report_toko.empty else 0
+        sum_sales_total = df_report_toko['TOTAL_SALES'].sum() if not df_report_toko.empty else 0
+        total_mobil_unik = df_filtered['NOPOL_CLEAN'].nunique() if not df_filtered.empty else 0
+        ach_sales_total = (sum_sales_total / (ASUMSI_TARGET * len(df_report_toko))) * 100 if len(df_report_toko) > 0 else 0
+        
+        grand_total_row = pd.DataFrame([{
             'STORE_CLEAN': 'Grand Total / Average',
-            'AVG_RITASE': df_report_toko['AVG_RITASE'].mean(),
-            'TOTAL_SALES': df_report_toko['TOTAL_SALES'].sum(),
-            'JUMLAH_MOBIL': df_filtered[nopol_col].nunique(),
-            'ACH_SALES': (df_report_toko['TOTAL_SALES'].sum() / (ASUMSI_TARGET * len(df_report_toko))) * 100 if len(df_report_toko) > 0 else 0
+            'AVG_RITASE': avg_ritase_total,
+            'TOTAL_SALES': sum_sales_total,
+            'JUMLAH_MOBIL': total_mobil_unik,
+            'ACH_SALES': ach_sales_total
         }])
         
-        df_final_toko = pd.concat([df_report_toko, grand_total], ignore_index=True)
+        df_final_toko = pd.concat([df_report_toko, grand_total_row], ignore_index=True)
         
-        # Format Akhir Tampilan Tabel
         df_tampil_toko = pd.DataFrame()
-        df_tampil_toko['NAMA TOKO (STORE)'] = df_final_toko['STORE_CLEAN']
-        df_tampil_toko['RATA-RATA RITASE / HARI'] = df_final_toko['AVG_RITASE'].apply(lambda x: f"{x:.1f} Rit")
-        df_tampil_toko['TOTAL SALES (TARIF)'] = df_final_toko['TOTAL_SALES'].apply(format_id)
+        df_tampil_toko['NAMA TOKO (DESTINATION)'] = df_final_toko['STORE_CLEAN']
+        df_tampil_toko['RATA-RATA RITASE / HARI'] = df_final_toko['AVG_RITASE'].apply(lambda x: f"{x:.1f} Rit" if pd.notnull(x) else "0.0 Rit")
+        df_tampil_toko['TOTAL SALES (VALUE)'] = df_final_toko['TOTAL_SALES'].apply(format_id)
         df_tampil_toko['ACH SALES (%)'] = df_final_toko['ACH_SALES'].apply(format_persen)
-        df_tampil_toko['ARMADA JALAN (BY NOPOL)'] = df_final_toko['JUMLAH_MOBIL'].apply(lambda x: f"{x} Mobil")
+        df_tampil_toko['ARMADA JALAN (BY NOPOL)'] = df_final_toko['JUMLAH_MOBIL'].apply(lambda x: f"{x} Mobil" if pd.notnull(x) else "0 Mobil")
         
-        st.write(f"💡 Menampilkan rekap operasional untuk **{len(df_report_toko)}** Toko aktif:")
+        st.write(f"💡 Menampilkan rekap operasional untuk **{len(df_report_toko)}** Cabang/Tujuan aktif:")
         st.dataframe(df_tampil_toko, use_container_width=True, height=400)
         st.info("ℹ️ Catatan: Kolom 'ACH SALES (%)' dihitung dengan asumsi target Rp 50.000.000 per toko.")
     else:
-        st.warning("⚠️ Data hasil filter kosong. Pastikan kotak filter di sidebar kiri sudah tercentang dengan benar.")
+        st.warning("⚠️ Data hasil filter kosong. Silakan sesuaikan filter di sidebar kiri agar laporan toko muncul.")
