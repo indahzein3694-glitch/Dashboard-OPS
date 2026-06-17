@@ -1,207 +1,267 @@
-import streamlit as st
+import streamlit as np
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
+from datetime import datetime
 
-# 1. KONFIGURASI HALAMAN UTAMA (Wajib Paling Atas)
+# 1. Page Configuration & Theme
 st.set_page_config(
-    page_title="Sistem Informasi ASG", 
+    page_title="Sales & Ritase Dashboard",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# STYLE CSS CUSTOM UNTUK METRIK DASHBOARD
+# Custom Deep Orange & Gen Z CSS Style with Bootstrap 5 vibes
 st.markdown("""
     <style>
-    .stApp { background-color: #f8fafc; }
-    .metric-card {
-        background-color: #ffffff; padding: 20px; border-radius: 12px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.04); border: 1px solid #e2e8f0; text-align: center;
-        margin-bottom: 15px;
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+    
+    * {
+        font-family: 'Plus Jakarta Sans', sans-serif;
     }
-    .metric-title { font-size: 13px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;}
-    .metric-value { font-size: 28px; font-weight: 700; color: #1e3a8a; }
+    
+    /* Main Background */
+    .stApp {
+        background-color: #fcfbfa;
+    }
+    
+    /* Card Styles */
+    .kpi-card {
+        background: white;
+        padding: 24px;
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(235, 94, 40, 0.05);
+        border: 1px solid rgba(235, 94, 40, 0.08);
+        transition: transform 0.2s ease;
+        margin-bottom: 20px;
+    }
+    .kpi-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 6px 25px rgba(235, 94, 40, 0.1);
+    }
+    .kpi-title {
+        color: #6c757d;
+        font-size: 14px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+    }
+    .kpi-value {
+        color: #ff5722;
+        font-size: 28px;
+        font-weight: 700;
+    }
+    
+    /* Section Title */
+    .section-title {
+        color: #212529;
+        font-size: 20px;
+        font-weight: 700;
+        margin-top: 10px;
+        margin-bottom: 20px;
+    }
     </style>
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
-# 2. FUNGSI AMBIL DATA DARI GOOGLE SHEETS
-url = "https://docs.google.com/spreadsheets/d/1-8ySRDAkrbbBMjBEiW3hXsNN3BMFe0OnWJqd9tXQRpg/export?format=csv"
-
-@st.cache_data
-def load_data_asg_final():
-    df = pd.read_csv(url, low_memory=False)
-    df = df.dropna(how='all')
+# 2. Data Loading Function (Google Sheets)
+@st.cache_data(ttl=600)
+def load_data():
+    sheet_id = "1Z3sGqENFtjF-gGsRuN4lLUhmGZa5X1AbVx8Ueu-63YQ"
+    sheet_name = "LAPORAN"
+    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
     
-    # Bersihkan nama kolom menjadi HURUF BESAR SEMUA
-    df.columns = [str(col).strip().upper() for col in df.columns]
-    
-    # KUNCI POSISI KOLOM SECARA PAS DAN AKURAT
-    # 1. TOTAL VALUE diisi ke Sales/Tarif (Uang Miliaran)
-    if 'TOTAL VALUE' in df.columns:
-        df['TARIF_NUM'] = pd.to_numeric(df['TOTAL VALUE'], errors='coerce').fillna(0)
-    else:
-        df['TARIF_NUM'] = 0
+    try:
+        df = pd.read_csv(url)
         
-    # 2. Jarak Kilometer diisi dari kolom KILOMETER atau KM asli (Jika tidak ada, diset 0 secara aman)
-    if 'KILOMETER' in df.columns:
-        df['KM_NUM'] = pd.to_numeric(df['KILOMETER'], errors='coerce').fillna(0)
-    elif 'KM' in df.columns:
-        df['KM_NUM'] = pd.to_numeric(df['KM'], errors='coerce').fillna(0)
-    else:
-        df['KM_NUM'] = 0
+        # Clean column names (strip spaces)
+        df.columns = [c.strip() for c in df.columns]
         
-    # 3. Kolom Toko diambil dari DESTINATION
-    if 'DESTINATION' in df.columns:
-        df['STORE_CLEAN'] = df['DESTINATION'].astype(str).str.strip()
-    else:
-        df['STORE_CLEAN'] = "UNKNOWN"
+        # Convert TANGGAL to datetime
+        df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], errors='coerce')
         
-    # 4. Plat Nomor
-    df['NOPOL_CLEAN'] = df['NOPOL'].astype(str).str.strip().str.upper() if 'NOPOL' in df.columns else "UNKNOWN"
-
-    # 5. Filter Tanggal
-    df['YEAR_CLEAN'] = pd.to_numeric(df['YEAR'], errors='coerce').fillna(2026).astype(int).astype(str) if 'YEAR' in df.columns else "2026"
-    df['MONTH_CLEAN'] = pd.to_numeric(df['MONTH'], errors='coerce').fillna(1).astype(int).astype(str) if 'MONTH' in df.columns else "1"
-    df['DATE_CLEAN'] = pd.to_numeric(df['DATE'], errors='coerce').fillna(1).astype(int).astype(str) if 'DATE' in df.columns else "1"
-    
-    # Bersihkan baris kotor
-    df = df[df['STORE_CLEAN'].str.upper() != 'DESTINATION']
-    df = df[df['STORE_CLEAN'] != 'nan']
+        # Numeric conversions
+        df['SALES'] = pd.to_numeric(df['SALES'], errors='coerce').fillna(0)
+        df['RITASE'] = pd.to_numeric(df['RITASE'], errors='coerce').fillna(0)
+        df['ALL ONE WAY'] = pd.to_numeric(df['ALL ONE WAY'], errors='coerce').fillna(0)
+        df['YEAR'] = pd.to_numeric(df['YEAR'], errors='coerce')
         
-    return df
+        # Clean string categories
+        df['STORE'] = df['STORE'].astype(str).str.strip()
+        df['NOPOL'] = df['NOPOL'].astype(str).str.strip()
+        df['TYPE'] = df['TYPE'].astype(str).str.strip()
+        
+        return df
+    except Exception as e:
+        st.error(f"Gagal memuat data dari Google Sheets. Pastikan link dapat diakses publik. Error: {e}")
+        # Return fallback dummy data matching user structure if online fetch fails
+        dates = pd.date_range(start="2025-01-01", end="2026-12-31", freq="D")
+        dummy_df = pd.DataFrame({
+            'TANGGAL': dates,
+            'NOPOL': ['B 1234 ABC', 'B 5678 DEF', 'B 9012 GHI'] * (len(dates)//3 + 1),
+            'RITASE': [1, 2, 1] * (len(dates)//3 + 1),
+            'STORE': ['Store A', 'Store B', 'Store C'] * (len(dates)//3 + 1),
+            'SALES': [1500000, 2500000, 1800000] * (len(dates)//3 + 1),
+            'ALL ONE WAY': [50000, 75000, 60000] * (len(dates)//3 + 1),
+            'YEAR': dates.year,
+            'TYPE': ['Carpet Rols', 'Carpet Tiles', 'Rug'] * (len(dates)//3 + 1)
+        })
+        return dummy_df[:len(dates)]
 
-try:
-    df = load_data_asg_final()
-except Exception as e:
-    st.error(f"Gagal memuat data dari Google Sheets: {e}")
-    st.stop()
+df_raw = load_data()
 
+# Drop rows with invalid dates
+df_cleaned = df_raw.dropna(subset=['TANGGAL']).copy()
 
-# =======================================================
-# 3. SIDEBAR UTAMA & PEMBERIAN FILTER
-# =======================================================
-st.sidebar.markdown("### 🗂️ NAVIGASI MENU")
-pilihan_menu = st.sidebar.radio("Pilih Halaman:", options=["Dashboard Utama", "Laporan Operasional Toko"])
+# 3. Sidebar Filters
+st.sidebar.image("https://img.icons8.com/fluent/96/000000/dashboard.png", width=80)
+st.sidebar.markdown("<h2 style='color: #ff5722; font-weight:700;'>Filter Data</h2>", unsafe_allow_html=True)
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 🔍 FILTER DATA GLOBAL")
+# Date Filter
+min_date = df_cleaned['TANGGAL'].min().to_pydatetime() if not df_cleaned.empty else datetime(2025, 1, 1)
+max_date = df_cleaned['TANGGAL'].max().to_pydatetime() if not df_cleaned.empty else datetime(2026, 12, 31)
 
-list_year = sorted([y for y in df['YEAR_CLEAN'].unique() if y != '0' and y != 'nan'])
-selected_year = st.sidebar.multiselect("YEAR", options=list_year, default=list_year)
+start_date, end_date = st.sidebar.date_input(
+    "Rentang Tanggal",
+    value=(min_date, max_date),
+    min_value=min_date,
+    max_value=max_date
+)
 
-list_month = sorted([m for m in df['MONTH_CLEAN'].unique() if m != '0' and m != 'nan'], key=lambda x: int(x) if x.isdigit() else 0)
-selected_month = st.sidebar.multiselect("MONTH", options=list_month, default=list_month)
+# Store Filter
+store_options = ["Semua Store"] + sorted(list(df_cleaned['STORE'].unique()))
+selected_store = st.sidebar.selectbox("Pilih Store", store_options)
 
-list_date = sorted([d for d in df['DATE_CLEAN'].unique() if d != '0' and d != 'nan'], key=lambda x: int(x) if x.isdigit() else 0)
-selected_date = st.sidebar.multiselect("DATE (Tanggal)", options=list_date, default=list_date)
-
-list_store = sorted([s for s in df['STORE_CLEAN'].unique() if s != 'nan' and s != 'None'])
-selected_store = st.sidebar.multiselect("STORE (Toko/Cabang)", options=list_store, default=list_store)
-
-df_filtered = df[
-    (df['YEAR_CLEAN'].isin(selected_year)) &
-    (df['MONTH_CLEAN'].isin(selected_month)) &
-    (df['DATE_CLEAN'].isin(selected_date)) &
-    (df['STORE_CLEAN'].isin(selected_store))
+# Filter Processing
+df_filtered = df_cleaned[
+    (df_cleaned['TANGGAL'] >= pd.to_datetime(start_date)) & 
+    (df_cleaned['TANGGAL'] <= pd.to_datetime(end_date))
 ]
 
-def format_id(angka):
-    return f"{angka:,.0f}".replace(",", ".")
+if selected_store != "Semua Store":
+    df_filtered = df_filtered[df_filtered['STORE'] == selected_store]
 
-def format_persen(angka):
-    return f"{angka:.1f}%"
+# 4. Header Section
+st.markdown("<h1 style='color: #ff5722; font-weight:800; margin-bottom: 5px;'>🍊 SALES & RITASE DASHBOARD</h1>", unsafe_allow_html=True)
+st.markdown("<p style='color: #6c757d; font-size: 15px; margin-bottom: 25px;'>Gaya Modern Deep Orange • Real-time Monitoring & Analysis</p>", unsafe_allow_html=True)
 
+# 5. KPI Metrics Calculation
+total_sales = df_filtered['SALES'].sum()
+total_all_one_way = df_filtered['ALL ONE WAY'].sum()
 
-# =======================================================
-# KONDISI 1: DASHBOARD UTAMA
-# =======================================================
-if pilihan_menu == "Dashboard Utama":
-    st.markdown("<h2 style='text-align: center; color: #1e3a8a; margin-bottom: 5px; font-family: sans-serif;'>DASHBOARD OPERASIONAL ASG</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #64748b; font-size: 14px; margin-bottom: 30px;'>PT Alfa Sir Guna • Ringkasan Visual Grafik Performa</p>", unsafe_allow_html=True)
+# Count Ritase Formula: (countA ritase / total nopol aktif / hari)
+total_days = df_filtered['TANGGAL'].nunique()
+if total_days > 0:
+    count_ritase_total = df_filtered[df_filtered['RITASE'] > 0]['RITASE'].count()
+    active_nopol_per_day = df_filtered.groupby('TANGGAL')['NOPOL'].nunique().mean()
+    ritase_index = (count_ritase_total / active_nopol_per_day / total_days) if active_nopol_per_day > 0 else 0
+else:
+    ritase_index = 0
+
+# Render KPI using HTML blocks for Bootstrap-style visual precision
+kpi1, kpi2, kpi3 = st.columns(3)
+
+with kpi1:
+    st.markdown(f"""
+        <div class="kpi-card">
+            <div class="kpi-title">Total Sales</div>
+            <div class="kpi-value">Rp {total_sales:,.0f}</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+with kpi2:
+    st.markdown(f"""
+        <div class="kpi-card">
+            <div class="kpi-title">Ritase Index (Avg/Day)</div>
+            <div class="kpi-value">{ritase_index:.2f} <span style='font-size:14px; font-weight:400; color:#6c757d;'>rit/truk</span></div>
+        </div>
+    """, unsafe_allow_html=True)
+
+with kpi3:
+    st.markdown(f"""
+        <div class="kpi-card">
+            <div class="kpi-title">Total All One Way</div>
+            <div class="kpi-value">Rp {total_all_one_way:,.0f}</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("<div class='section-title'>Visualisasi Performa</div>", unsafe_allow_html=True)
+
+# 6. Charts Layout
+row1_col1, row1_col2 = st.columns(2)
+
+# Chart 1: Bar Chart Sales 2025 vs 2026
+with row1_col1:
+    st.markdown("<b style='color:#212529;'>Perbandingan Sales Tahun 2025 vs 2026</b>", unsafe_allow_html=True)
+    df_sales_yr = df_filtered[df_filtered['YEAR'].isin([2025, 2026])].groupby('YEAR')['SALES'].sum().reset_index()
+    df_sales_yr['YEAR'] = df_sales_yr['YEAR'].astype(str)
     
-    if not df_filtered.empty:
-        total_ritase = len(df_filtered)
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.markdown(f"<div class='metric-card'><div class='metric-title'>Total Ritase</div><div class='metric-value'>{format_id(total_ritase)}</div><p style='color: #64748b; font-size: 11px; margin-top:5px;'>Count Order</p></div>", unsafe_allow_html=True)
-        with col2:
-            st.markdown(f"<div class='metric-card'><div class='metric-title'>Total Sales (Tarif)</div><div class='metric-value'>Rp {format_id(df_filtered['TARIF_NUM'].sum())}</div><p style='color: #64748b; font-size: 11px; margin-top:5px;'>Sum TOTAL VALUE</p></div>", unsafe_allow_html=True)
-        with col3:
-            st.markdown(f"<div class='metric-card'><div class='metric-title'>Total Kilometer</div><div class='metric-value'>{format_id(df_filtered['KM_NUM'].sum())} KM</div><p style='color: #64748b; font-size: 11px; margin-top:5px;'>Sum Kilometer</p></div>", unsafe_allow_html=True)
-            
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        df_chart = df_filtered.groupby('DATE_CLEAN').agg(
-            SALES_TOTAL=('TARIF_NUM', 'sum'),
-            RITASE_TOTAL=('TARIF_NUM', 'count')
-        ).reset_index()
-        df_chart = df_chart.sort_values('DATE_CLEAN', key=lambda x: pd.to_numeric(x, errors='coerce'))
-        
-        grid_col1, grid_col2 = st.columns(2)
-        cfg = {
-            'plot_bgcolor': 'rgba(0,0,0,0)', 'paper_bgcolor': 'rgba(0,0,0,0)',
-            'xaxis': {'showgrid': False, 'type': 'category', 'title': 'Tanggal (DATE)'}, 
-            'yaxis': {'showgrid': True, 'gridcolor': '#e2e8f0'}
-        }
-        with grid_col1:
-            fig1 = px.line(df_chart, x="DATE_CLEAN", y="SALES_TOTAL", title="TREN PENJUALAN HARIAN (SALES)", markers=True)
-            fig1.update_traces(line_color='#1e3a8a', line_width=4)
-            fig1.update_layout(**cfg)
-            st.plotly_chart(fig1, use_container_width=True)
-        with grid_col2:
-            fig2 = px.line(df_chart, x="DATE_CLEAN", y="RITASE_TOTAL", title="TREN RITASE HARIAN (COUNT)", markers=True)
-            fig2.update_traces(line_color='#10b981', line_width=4)
-            fig2.update_layout(**cfg)
-            st.plotly_chart(fig2, use_container_width=True)
-    else:
-        st.warning("⚠️ Data hasil filter kosong. Silakan sesuaikan filter di sidebar kiri.")
+    fig_sales = px.bar(
+        df_sales_yr, x='YEAR', y='SALES',
+        color='YEAR',
+        color_discrete_map={'2025': '#ffb09c', '2026': '#ff5722'},
+        text_auto='.2s'
+    )
+    fig_sales.update_layout(
+        plot_bgcolor='white', paper_bgcolor='white',
+        margin=dict(t=20, b=20, l=20, r=20), showlegend=False,
+        xaxis_title=None, yaxis_title="Total Sales (Rp)"
+    )
+    st.plotly_chart(fig_sales, use_container_width=True)
 
-
-# =======================================================
-# KONDISI 2: LAPORAN OPERASIONAL TOKO
-# =======================================================
-elif pilihan_menu == "Laporan Operasional Toko":
-    st.markdown("<h2 style='color: #1e3a8a; font-family: sans-serif; margin-bottom: 5px;'>LAPORAN OPERASIONAL PER TOKO</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #64748b; font-size: 14px; margin-bottom: 15px;'>Ringkasan Rata-rata Ritase, Ach Sales, dan Jumlah Armada Aktif</p>", unsafe_allow_html=True)
-    st.markdown("<hr>", unsafe_allow_html=True)
+# Chart 2: Line Chart Ritase Trend
+with row1_col2:
+    st.markdown("<b style='color:#212529;'>Tren Ritase Berkala</b>", unsafe_allow_html=True)
+    df_ritase_trend = df_filtered.groupby('TANGGAL')['RITASE'].sum().reset_index()
     
-    if not df_filtered.empty:
-        df_ritase_harian = df_filtered.groupby(['STORE_CLEAN', 'DATE_CLEAN']).size().reset_index(name='RITASE_HARI')
-        df_avg_ritase = df_ritase_harian.groupby('STORE_CLEAN')['RITASE_HARI'].mean().reset_index(name='AVG_RITASE')
-        
-        df_store_summary = df_filtered.groupby('STORE_CLEAN').agg(
-            TOTAL_SALES=('TARIF_NUM', 'sum'),
-            JUMLAH_MOBIL=('NOPOL_CLEAN', 'nunique')
-        ).reset_index()
-        
-        df_report_toko = pd.merge(df_avg_ritase, df_store_summary, on='STORE_CLEAN')
-        
-        ASUMSI_TARGET = 50000000
-        df_report_toko['ACH_SALES'] = (df_report_toko['TOTAL_SALES'] / ASUMSI_TARGET) * 100
-        
-        avg_ritase_total = df_report_toko['AVG_RITASE'].mean() if not df_report_toko.empty else 0
-        sum_sales_total = df_report_toko['TOTAL_SALES'].sum() if not df_report_toko.empty else 0
-        total_mobil_unik = df_filtered['NOPOL_CLEAN'].nunique() if not df_filtered.empty else 0
-        ach_sales_total = (sum_sales_total / (ASUMSI_TARGET * len(df_report_toko))) * 100 if len(df_report_toko) > 0 else 0
-        
-        grand_total_row = pd.DataFrame([{
-            'STORE_CLEAN': 'Grand Total / Average',
-            'AVG_RITASE': avg_ritase_total,
-            'TOTAL_SALES': sum_sales_total,
-            'JUMLAH_MOBIL': total_mobil_unik,
-            'ACH_SALES': ach_sales_total
-        }])
-        
-        df_final_toko = pd.concat([df_report_toko, grand_total_row], ignore_index=True)
-        
-        df_tampil_toko = pd.DataFrame()
-        df_tampil_toko['NAMA TOKO (DESTINATION)'] = df_final_toko['STORE_CLEAN']
-        df_tampil_toko['RATA-RATA RITASE / HARI'] = df_final_toko['AVG_RITASE'].apply(lambda x: f"{x:.1f} Rit" if pd.notnull(x) else "0.0 Rit")
-        df_tampil_toko['TOTAL SALES (VALUE)'] = df_final_toko['TOTAL_SALES'].apply(format_id)
-        df_tampil_toko['ACH SALES (%)'] = df_final_toko['ACH_SALES'].apply(format_persen)
-        df_tampil_toko['ARMADA JALAN (BY NOPOL)'] = df_final_toko['JUMLAH_MOBIL'].apply(lambda x: f"{x} Mobil" if pd.notnull(x) else "0 Mobil")
-        
-        st.write(f"💡 Menampilkan rekap operasional untuk **{len(df_report_toko)}** Cabang/Tujuan aktif:")
-        st.dataframe(df_tampil_toko, use_container_width=True, height=400)
-        st.info("ℹ️ Catatan: Kolom 'ACH SALES (%)' dihitung dengan asumsi target Rp 50.000.000 per toko.")
-    else:
-        st.warning("⚠️ Data hasil filter kosong. Silakan sesuaikan filter di sidebar kiri agar laporan toko muncul.")
+    fig_line = px.line(df_ritase_trend, x='TANGGAL', y='RITASE', markers=True)
+    fig_line.update_traces(line_color='#e64a19', marker=dict(size=6, color='#ff5722'))
+    fig_line.update_layout(
+        plot_bgcolor='white', paper_bgcolor='white',
+        margin=dict(t=20, b=20, l=20, r=20),
+        xaxis_title=None, yaxis_title="Jumlah Ritase"
+    )
+    st.plotly_chart(fig_line, use_container_width=True)
+
+row2_col1, row2_col2 = st.columns(2)
+
+# Chart 3: Donut Chart Total Sales by Category (TYPE)
+with row2_col1:
+    st.markdown("<b style='color:#212529;'>Distribusi Sales per Kategori Produk</b>", unsafe_allow_html=True)
+    # Check if column 'TYPE' exists or substitute with placeholder
+    cat_col = 'TYPE' if 'TYPE' in df_filtered.columns else 'STORE'
+    df_cat = df_filtered.groupby(cat_col)['SALES'].sum().reset_index()
+    
+    fig_donut = px.pie(
+        df_cat, names=cat_col, values='SALES',
+        hole=0.5,
+        color_discrete_sequence=['#ff5722', '#ff7043', '#ff8a65', '#ffab91', '#ffccbc']
+    )
+    fig_donut.update_layout(
+        margin=dict(t=20, b=20, l=20, r=20),
+        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+    )
+    st.plotly_chart(fig_donut, use_container_width=True)
+
+# Chart 4: Horizontal Bar Chart Sales per Store
+with row2_col2:
+    st.markdown("<b style='color:#212529;'>Peringkat Sales per Store</b>", unsafe_allow_html=True)
+    df_store_sales = df_filtered.groupby('STORE')['SALES'].sum().reset_index().sort_values(by='SALES', ascending=True)
+    
+    fig_horiz = px.bar(
+        df_store_sales, x='SALES', y='STORE',
+        orientation='h',
+        text_auto='.2s'
+    )
+    fig_horiz.update_traces(marker_color='#ff7043')
+    fig_horiz.update_layout(
+        plot_bgcolor='white', paper_bgcolor='white',
+        margin=dict(t=20, b=20, l=20, r=20),
+        xaxis_title="Total Sales (Rp)", yaxis_title=None
+    )
+    st.plotly_chart(fig_horiz, use_container_width=True)
+
+# Footer info
+st.markdown("<hr style='border: 0.5px solid rgba(235, 94, 40, 0.1);'>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #a0aec0; font-size: 12px;'>Dashboard Sales & Ritase • Built with Streamlit & Bootstrap styling layout</p>", unsafe_allow_html=True)
