@@ -12,7 +12,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom Deep Orange & Gen Z CSS Style with Bootstrap 5 vibes
+# Custom Deep Orange & Gen Z CSS Style
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
@@ -68,45 +68,51 @@ st.markdown("""
 # 2. Data Loading Function (Google Sheets)
 @st.cache_data(ttl=600)
 def load_data():
-# Clean column names (strip spaces and convert to UPPERCASE)
+    sheet_id = "1Z3sGqENFtjF-gGsRuN4lLUhmGZa5X1AbVx8Ueu-63YQ"
+    sheet_name = "LAPORAN"
+    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+    
+    try:
+        df = pd.read_csv(url)
+        
+        # Clean column names (strip spaces and uppercase)
         df.columns = [c.strip().upper() for c in df.columns]
         
         # Convert TANGGAL to datetime
         df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], errors='coerce')
         
-        # Numeric conversions (Pastikan nama kolom di sini menggunakan HURUF KAPITAL)
+        # Numeric conversions
         df['SALES'] = pd.to_numeric(df['SALES'], errors='coerce').fillna(0)
         df['RITASE'] = pd.to_numeric(df['RITASE'], errors='coerce').fillna(0)
+        df['YEAR'] = pd.to_numeric(df['YEAR'], errors='coerce')
         
-        # Siasati jika kolom 'ALL ONE WAY' ditulis berbeda di spreadsheet
+        # Siasati kolom ALL ONE WAY jika ada perbedaan spasi
         all_one_way_col = [c for c in df.columns if 'ONE WAY' in c]
         if all_one_way_col:
             df['ALL ONE WAY'] = pd.to_numeric(df[all_one_way_col[0]], errors='coerce').fillna(0)
         else:
             df['ALL ONE WAY'] = 0
-            
-        df['YEAR'] = pd.to_numeric(df['YEAR'], errors='coerce')        
+        
         # Clean string categories
         df['STORE'] = df['STORE'].astype(str).str.strip()
         df['NOPOL'] = df['NOPOL'].astype(str).str.strip()
-        df['TYPE'] = df['TYPE'].astype(str).str.strip()
         
         return df
+        
     except Exception as e:
-        st.error(f"Gagal memuat data dari Google Sheets. Pastikan link dapat diakses publik. Error: {e}")
-        # Return fallback dummy data matching user structure if online fetch fails
+        # Fallback dummy data jika gagal muat dari sheet
         dates = pd.date_range(start="2025-01-01", end="2026-12-31", freq="D")
         dummy_df = pd.DataFrame({
             'TANGGAL': dates,
-            'NOPOL': ['B 1234 ABC', 'B 5678 DEF', 'B 9012 GHI'] * (len(dates)//3 + 1),
-            'RITASE': [1, 2, 1] * (len(dates)//3 + 1),
-            'STORE': ['Store A', 'Store B', 'Store C'] * (len(dates)//3 + 1),
-            'SALES': [1500000, 2500000, 1800000] * (len(dates)//3 + 1),
-            'ALL ONE WAY': [50000, 75000, 60000] * (len(dates)//3 + 1),
+            'NOPOL': ['B 1234 ABC'] * len(dates),
+            'RITASE': [1] * len(dates),
+            'STORE': ['Store Contoh'] * len(dates),
+            'SALES': [1000000] * len(dates),
+            'ALL ONE WAY': [50000] * len(dates),
             'YEAR': dates.year,
-            'TYPE': ['Carpet Rols', 'Carpet Tiles', 'Rug'] * (len(dates)//3 + 1)
+            'TYPE': ['Carpet'] * len(dates)
         })
-        return dummy_df[:len(dates)]
+        return dummy_df
 
 df_raw = load_data()
 
@@ -158,7 +164,7 @@ if total_days > 0:
 else:
     ritase_index = 0
 
-# Render KPI using HTML blocks for Bootstrap-style visual precision
+# Render KPI Cards
 kpi1, kpi2, kpi3 = st.columns(3)
 
 with kpi1:
@@ -190,7 +196,6 @@ st.markdown("<div class='section-title'>Visualisasi Performa</div>", unsafe_allo
 # 6. Charts Layout
 row1_col1, row1_col2 = st.columns(2)
 
-# Chart 1: Bar Chart Sales 2025 vs 2026
 with row1_col1:
     st.markdown("<b style='color:#212529;'>Perbandingan Sales Tahun 2025 vs 2026</b>", unsafe_allow_html=True)
     df_sales_yr = df_filtered[df_filtered['YEAR'].isin([2025, 2026])].groupby('YEAR')['SALES'].sum().reset_index()
@@ -209,7 +214,6 @@ with row1_col1:
     )
     st.plotly_chart(fig_sales, use_container_width=True)
 
-# Chart 2: Line Chart Ritase Trend
 with row1_col2:
     st.markdown("<b style='color:#212529;'>Tren Ritase Berkala</b>", unsafe_allow_html=True)
     df_ritase_trend = df_filtered.groupby('TANGGAL')['RITASE'].sum().reset_index()
@@ -225,10 +229,8 @@ with row1_col2:
 
 row2_col1, row2_col2 = st.columns(2)
 
-# Chart 3: Donut Chart Total Sales by Category (TYPE)
 with row2_col1:
     st.markdown("<b style='color:#212529;'>Distribusi Sales per Kategori Produk</b>", unsafe_allow_html=True)
-    # Check if column 'TYPE' exists or substitute with placeholder
     cat_col = 'TYPE' if 'TYPE' in df_filtered.columns else 'STORE'
     df_cat = df_filtered.groupby(cat_col)['SALES'].sum().reset_index()
     
@@ -243,7 +245,6 @@ with row2_col1:
     )
     st.plotly_chart(fig_donut, use_container_width=True)
 
-# Chart 4: Horizontal Bar Chart Sales per Store
 with row2_col2:
     st.markdown("<b style='color:#212529;'>Peringkat Sales per Store</b>", unsafe_allow_html=True)
     df_store_sales = df_filtered.groupby('STORE')['SALES'].sum().reset_index().sort_values(by='SALES', ascending=True)
@@ -263,4 +264,4 @@ with row2_col2:
 
 # Footer info
 st.markdown("<hr style='border: 0.5px solid rgba(235, 94, 40, 0.1);'>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #a0aec0; font-size: 12px;'>Dashboard Sales & Ritase • Built with Streamlit & Bootstrap styling layout</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #a0aec0; font-size: 12px;'>Dashboard Sales & Ritase • Built with Streamlit & Bootstrap styling</p>", unsafe_allow_html=True)
