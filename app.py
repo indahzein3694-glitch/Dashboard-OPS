@@ -68,25 +68,24 @@ st.markdown("""
 # 2. Data Loading Function (Google Sheets)
 @st.cache_data(ttl=600)
 def load_data():
-    sheet_id = "1Z3sGqENFtjF-gGsRuN4lLUhmGZa5X1AbVx8Ueu-63YQ"
-    sheet_name = "LAPORAN"
-    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
-    
-    try:
-        df = pd.read_csv(url)
-        
-        # Clean column names (strip spaces)
-        df.columns = [c.strip() for c in df.columns]
+# Clean column names (strip spaces and convert to UPPERCASE)
+        df.columns = [c.strip().upper() for c in df.columns]
         
         # Convert TANGGAL to datetime
         df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], errors='coerce')
         
-        # Numeric conversions
+        # Numeric conversions (Pastikan nama kolom di sini menggunakan HURUF KAPITAL)
         df['SALES'] = pd.to_numeric(df['SALES'], errors='coerce').fillna(0)
         df['RITASE'] = pd.to_numeric(df['RITASE'], errors='coerce').fillna(0)
-        df['ALL ONE WAY'] = pd.to_numeric(df['ALL ONE WAY'], errors='coerce').fillna(0)
-        df['YEAR'] = pd.to_numeric(df['YEAR'], errors='coerce')
         
+        # Siasati jika kolom 'ALL ONE WAY' ditulis berbeda di spreadsheet
+        all_one_way_col = [c for c in df.columns if 'ONE WAY' in c]
+        if all_one_way_col:
+            df['ALL ONE WAY'] = pd.to_numeric(df[all_one_way_col[0]], errors='coerce').fillna(0)
+        else:
+            df['ALL ONE WAY'] = 0
+            
+        df['YEAR'] = pd.to_numeric(df['YEAR'], errors='coerce')        
         # Clean string categories
         df['STORE'] = df['STORE'].astype(str).str.strip()
         df['NOPOL'] = df['NOPOL'].astype(str).str.strip()
