@@ -108,7 +108,7 @@ def load_data():
             'RITASE': [1] * len(dates),
             'STORE': ['Store Contoh'] * len(dates),
             'SALES': [1000000] * len(dates),
-            'ALL ONE WAY': [50000] * len(dates),
+            'ALL ONE WAY': [50] * len(dates),
             'YEAR': dates.year,
             'TYPE': ['Carpet'] * len(dates)
         })
@@ -148,8 +148,8 @@ if selected_store != "Semua Store":
     df_filtered = df_filtered[df_filtered['STORE'] == selected_store]
 
 # 4. Header Section
-st.markdown("<h1 style='color: #ff5722; font-weight:800; margin-bottom: 5px;'>🍊 SALES & RITASE DASHBOARD</h1>", unsafe_allow_html=True)
-st.markdown("<p style='color: #6c757d; font-size: 15px; margin-bottom: 25px;'>Gaya Modern Deep Orange • Real-time Monitoring & Analysis</p>", unsafe_allow_html=True)
+st.markdown("<h1 style='color: #ff5722; font-weight:800; margin-bottom: 5px;'>SALES & RITASE DASHBOARD</h1>", unsafe_allow_html=True)
+st.markdown("<p style='color: #6c757d; font-size: 15px; margin-bottom: 25px;'>Operasional ASG • Real-time Monitoring & Analysis</p>", unsafe_allow_html=True)
 
 # 5. KPI Metrics Calculation
 total_sales = df_filtered['SALES'].sum()
@@ -187,7 +187,7 @@ with kpi3:
     st.markdown(f"""
         <div class="kpi-card">
             <div class="kpi-title">Total All One Way</div>
-            <div class="kpi-value">Rp {total_all_one_way:,.0f}</div>
+            <div class="kpi-value">{total_all_one_way:,.0f} <span style='font-size:14px; font-weight:400; color:#6c757d;'>KM</span></div>
         </div>
     """, unsafe_allow_html=True)
 
