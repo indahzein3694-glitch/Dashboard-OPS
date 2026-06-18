@@ -81,15 +81,25 @@ def load_data():
         # Convert TANGGAL to datetime
         df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], errors='coerce')
         
-        # Numeric conversions
-        df['SALES'] = pd.to_numeric(df['SALES'], errors='coerce').fillna(0)
+        # Pembersihan teks dan konversi angka pada kolom SALES
+        if 'SALES' in df.columns:
+            df['SALES'] = df['SALES'].astype(str).str.replace('Rp', '', regex=False)
+            df['SALES'] = df['SALES'].str.replace('.', '', regex=False)
+            df['SALES'] = df['SALES'].str.replace(',', '.', regex=False)
+            df['SALES'] = df['SALES'].str.strip()
+            df['SALES'] = pd.to_numeric(df['SALES'], errors='coerce').fillna(0)
+        else:
+            df['SALES'] = 0
+            
+        # Konversi angka untuk RITASE dan YEAR
         df['RITASE'] = pd.to_numeric(df['RITASE'], errors='coerce').fillna(0)
         df['YEAR'] = pd.to_numeric(df['YEAR'], errors='coerce')
         
-        # Siasati kolom ALL ONE WAY jika ada perbedaan spasi
+        # Siasati kolom ALL ONE WAY jika ada perbedaan spasi atau penulisan
         all_one_way_col = [c for c in df.columns if 'ONE WAY' in c]
         if all_one_way_col:
-            df['ALL ONE WAY'] = pd.to_numeric(df[all_one_way_col[0]], errors='coerce').fillna(0)
+            df['ALL ONE WAY'] = df[all_one_way_col[0]].astype(str).str.replace('.', '', regex=False)
+            df['ALL ONE WAY'] = pd.to_numeric(df['ALL ONE WAY'], errors='coerce').fillna(0)
         else:
             df['ALL ONE WAY'] = 0
         
