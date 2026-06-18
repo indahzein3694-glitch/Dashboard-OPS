@@ -95,6 +95,10 @@ def load_data():
         df['RITASE'] = pd.to_numeric(df['RITASE'], errors='coerce').fillna(0)
         df['YEAR'] = pd.to_numeric(df['YEAR'], errors='coerce')
         
+        # Buat kolom tambahan untuk Bulan dan Tanggal (Angka Hari) demi kebutuhan filter
+        df['MONTH_NAME'] = df['TANGGAL'].dt.strftime('%B') # Nama bulan (January, February, dst)
+        df['DAY_NUM'] = df['TANGGAL'].dt.day
+        
         # Siasati kolom ALL ONE WAY jika ada perbedaan spasi atau penulisan
         all_one_way_col = [c for c in df.columns if 'ONE WAY' in c]
         if all_one_way_col:
@@ -127,6 +131,8 @@ def load_data():
             'SALES': [1000000] * len(dates),
             'ALL ONE WAY': [50] * len(dates),
             'YEAR': dates.year,
+            'MONTH_NAME': dates.strftime('%B'),
+            'DAY_NUM': dates.day,
             'TYPE': ['Carpet'] * len(dates)
         })
         return dummy_df
@@ -140,31 +146,43 @@ df_cleaned = df_raw.dropna(subset=['TANGGAL']).copy()
 st.sidebar.image("https://img.icons8.com/fluent/96/000000/dashboard.png", width=80)
 st.sidebar.markdown("<h2 style='color: #ff5722; font-weight:700;'>Filter Data</h2>", unsafe_allow_html=True)
 
-# Date Filter
-min_date = df_cleaned['TANGGAL'].min().to_pydatetime() if not df_cleaned.empty else datetime(2025, 1, 1)
-max_date = df_cleaned['TANGGAL'].max().to_pydatetime() if not df_cleaned.empty else datetime(2026, 12, 31)
+# --- FILTER BARU: YEAR, MONTH, DATE ---
+# Filter Year
+year_list = ["Semua Tahun"] + sorted([str(int(y)) for y in df_cleaned['YEAR'].dropna().unique()])
+selected_year = st.sidebar.selectbox("Pilih YEAR (Tahun)", year_list)
 
-start_date, end_date = st.sidebar.date_input(
-    "Rentang Tanggal",
-    value=(min_date, max_date),
-    min_value=min_date,
-    max_value=max_date
-)
+# Filter Month
+month_order = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+available_months = [m for m in month_order if m in df_cleaned['MONTH_NAME'].unique()]
+month_list = ["Semua Bulan"] + available_months
+selected_month = st.sidebar.selectbox("Pilih MONTH (Bulan)", month_list)
 
-# Store Filter (Dipastikan membuang nilai kosong/NaN dan diubah ke string murni sebelum di-sorted)
+# Filter Date (Tanggal 1-31)
+date_list = ["Semua Tanggal"] + sorted([str(int(d)) for d in df_cleaned['DAY_NUM'].dropna().unique()])
+selected_date = st.sidebar.selectbox("Pilih DATE (Tanggal)", date_list)
+
+# Store Filter
 raw_stores = df_cleaned['STORE'].dropna().unique()
 clean_stores = sorted([str(s) for s in raw_stores if str(s).strip() != ''])
 store_options = ["Semua Store"] + clean_stores
 selected_store = st.sidebar.selectbox("Pilih Store", store_options)
 
-# Filter Processing
-df_filtered = df_cleaned[
-    (df_cleaned['TANGGAL'] >= pd.to_datetime(start_date)) & 
-    (df_cleaned['TANGGAL'] <= pd.to_datetime(end_date))
-]
+
+# --- PROSES FILTERING ---
+df_filtered = df_cleaned.copy()
+
+if selected_year != "Semua Tahun":
+    df_filtered = df_filtered[df_filtered['YEAR'] == int(selected_year)]
+
+if selected_month != "Semua Bulan":
+    df_filtered = df_filtered[df_filtered['MONTH_NAME'] == selected_month]
+
+if selected_date != "Semua Tanggal":
+    df_filtered = df_filtered[df_filtered['DAY_NUM'] == int(selected_date)]
 
 if selected_store != "Semua Store":
     df_filtered = df_filtered[df_filtered['STORE'] == selected_store]
+
 
 # 4. Header Section
 st.markdown("<h1 style='color: #ff5722; font-weight:800; margin-bottom: 5px;'>SALES & RITASE DASHBOARD</h1>", unsafe_allow_html=True)
