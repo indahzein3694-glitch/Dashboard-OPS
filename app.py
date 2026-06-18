@@ -15,7 +15,7 @@ st.set_page_config(
 # Custom Deep Orange & Gen Z CSS Style
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
     
     * {
         font-family: 'Plus Jakarta Sans', sans-serif;
@@ -81,10 +81,10 @@ def load_data():
         # Convert TANGGAL to datetime
         df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], errors='coerce')
         
-        # PERBAIKAN UTAMA: Menghapus koma ribuan agar terbaca utuh ratusan ribu/jutaan
+        # Pembersihan teks dan konversi angka pada kolom SALES
         if 'SALES' in df.columns:
             df['SALES'] = df['SALES'].astype(str).str.replace('Rp', '', regex=False)
-            df['SALES'] = df['SALES'].str.replace(',', '', regex=False)  # Hapus koma ribuan dari sheet
+            df['SALES'] = df['SALES'].str.replace(',', '', regex=False)
             df['SALES'] = df['SALES'].str.strip()
             df['SALES'] = pd.to_numeric(df['SALES'], errors='coerce').fillna(0)
         else:
@@ -98,7 +98,7 @@ def load_data():
         df['MONTH_NAME'] = df['TANGGAL'].dt.strftime('%B')
         df['DAY_NUM'] = df['TANGGAL'].dt.day
         
-        # Siasati kolom ALL ONE WAY dengan pembersihan koma ribuan
+        # Siasati kolom ALL ONE WAY jika ada perbedaan spasi atau penulisan
         all_one_way_col = [c for c in df.columns if 'ONE WAY' in c]
         if all_one_way_col:
             df['ALL ONE WAY'] = df[all_one_way_col[0]].astype(str).str.replace(',', '', regex=False)
@@ -145,41 +145,42 @@ df_cleaned = df_raw.dropna(subset=['TANGGAL']).copy()
 st.sidebar.image("https://img.icons8.com/fluent/96/000000/dashboard.png", width=80)
 st.sidebar.markdown("<h2 style='color: #ff5722; font-weight:700;'>Filter Data</h2>", unsafe_allow_html=True)
 
-# Filter Year
-year_list = ["Semua Tahun"] + sorted([str(int(y)) for y in df_cleaned['YEAR'].dropna().unique()])
-selected_year = st.sidebar.selectbox("Pilih YEAR (Tahun)", year_list)
+# --- PERBAIKAN FILTER: SEKARANG MENGGUNAKAN MULTISELECT (BISA PILIH BANYAK) ---
 
-# Filter Month
+# Filter Year (Bisa Pilih Banyak)
+year_options = sorted([int(y) for y in df_cleaned['YEAR'].dropna().unique()])
+selected_years = st.sidebar.multiselect("Pilih YEAR (Tahun)", options=year_options, default=[])
+
+# Filter Month (Bisa Pilih Banyak)
 month_order = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
-available_months = [m for m in month_order if m in df_cleaned['MONTH_NAME'].unique()]
-month_list = ["Semua Bulan"] + available_months
-selected_month = st.sidebar.selectbox("Pilih MONTH (Bulan)", month_list)
+month_options = [m for m in month_order if m in df_cleaned['MONTH_NAME'].unique()]
+selected_months = st.sidebar.multiselect("Pilih MONTH (Bulan)", options=month_options, default=[])
 
-# Filter Date
-date_list = ["Semua Tanggal"] + sorted([str(int(d)) for d in df_cleaned['DAY_NUM'].dropna().unique()])
-selected_date = st.sidebar.selectbox("Pilih DATE (Tanggal)", date_list)
+# Filter Date (Bisa Pilih Banyak)
+date_options = sorted([int(d) for d in df_cleaned['DAY_NUM'].dropna().unique()])
+selected_dates = st.sidebar.multiselect("Pilih DATE (Tanggal)", options=date_options, default=[])
 
-# Store Filter
+# Store Filter (Bisa Pilih Banyak)
 raw_stores = df_cleaned['STORE'].dropna().unique()
-clean_stores = sorted([str(s) for s in raw_stores if str(s).strip() != ''])
-store_options = ["Semua Store"] + clean_stores
-selected_store = st.sidebar.selectbox("Pilih Store", store_options)
+store_options = sorted([str(s) for s in raw_stores if str(s).strip() != ''])
+selected_stores = st.sidebar.multiselect("Pilih Store", options=store_options, default=[])
 
 
-# --- PROSES FILTERING ---
+# --- PROSES FILTERING MULTISELECT ---
 df_filtered = df_cleaned.copy()
 
-if selected_year != "Semua Tahun":
-    df_filtered = df_filtered[df_filtered['YEAR'] == int(selected_year)]
+# Jika list tidak kosong, lakukan filter. Jika kosong/tidak memilih, maka otomatis memuat SEMUA data.
+if selected_years:
+    df_filtered = df_filtered[df_filtered['YEAR'].isin(selected_years)]
 
-if selected_month != "Semua Bulan":
-    df_filtered = df_filtered[df_filtered['MONTH_NAME'] == selected_month]
+if selected_months:
+    df_filtered = df_filtered[df_filtered['MONTH_NAME'].isin(selected_months)]
 
-if selected_date != "Semua Tanggal":
-    df_filtered = df_filtered[df_filtered['DAY_NUM'] == int(selected_date)]
+if selected_dates:
+    df_filtered = df_filtered[df_filtered['DAY_NUM'].isin(selected_dates)]
 
-if selected_store != "Semua Store":
-    df_filtered = df_filtered[df_filtered['STORE'] == selected_store]
+if selected_stores:
+    df_filtered = df_filtered[df_filtered['STORE'].isin(selected_stores)]
 
 
 # 4. Header Section
