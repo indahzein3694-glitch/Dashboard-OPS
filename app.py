@@ -94,8 +94,12 @@ def load_data():
         df['RITASE'] = pd.to_numeric(df['RITASE'], errors='coerce').fillna(0)
         df['YEAR'] = pd.to_numeric(df['YEAR'], errors='coerce')
         
+        # Jika kolom YEAR ada yang kosong, isi otomatis berdasarkan kolom TANGGAL
+        df['YEAR'] = df['YEAR'].fillna(df['TANGGAL'].dt.year).fillna(0).astype(int)
+        
         # Buat kolom tambahan untuk Bulan dan Tanggal (Angka Hari) demi kebutuhan filter
         df['MONTH_NAME'] = df['TANGGAL'].dt.strftime('%B')
+        df['MONTH_NUM'] = df['TANGGAL'].dt.month
         df['DAY_NUM'] = df['TANGGAL'].dt.day
         
         # Siasati kolom ALL ONE WAY jika ada perbedaan spasi atau penulisan
@@ -121,7 +125,7 @@ def load_data():
         
     except Exception as e:
         # Fallback dummy data jika gagal muat dari sheet
-        dates = pd.date_range(start="2025-01-01", end="2026-12-31", freq="D")
+        dates = pd.date_range(start="2024-01-01", end="2026-12-31", freq="D")
         dummy_df = pd.DataFrame({
             'TANGGAL': dates,
             'NOPOL': ['B 1234 ABC'] * len(dates),
@@ -131,6 +135,7 @@ def load_data():
             'ALL ONE WAY': [50] * len(dates),
             'YEAR': dates.year,
             'MONTH_NAME': dates.strftime('%B'),
+            'MONTH_NUM': dates.month,
             'DAY_NUM': dates.day,
             'TYPE': ['Carpet'] * len(dates)
         })
@@ -145,22 +150,22 @@ df_cleaned = df_raw.dropna(subset=['TANGGAL']).copy()
 st.sidebar.image("https://img.icons8.com/fluent/96/000000/dashboard.png", width=80)
 st.sidebar.markdown("<h2 style='color: #ff5722; font-weight:700;'>Filter Data</h2>", unsafe_allow_html=True)
 
-# --- PERBAIKAN FILTER: SEKARANG MENGGUNAKAN MULTISELECT (BISA PILIH BANYAK) ---
-
-# Filter Year (Bisa Pilih Banyak)
-year_options = sorted([int(y) for y in df_cleaned['YEAR'].dropna().unique()])
+# Filter Year (Menampilkan 2024, 2025, 2026 sesuai isi data sheet)
+year_options = sorted([int(y) for y in df_cleaned['YEAR'].unique() if y in [2024, 2025, 2026]])
+if not year_options:
+    year_options = [2024, 2025, 2026]
 selected_years = st.sidebar.multiselect("Pilih YEAR (Tahun)", options=year_options, default=[])
 
-# Filter Month (Bisa Pilih Banyak)
+# Filter Month
 month_order = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 month_options = [m for m in month_order if m in df_cleaned['MONTH_NAME'].unique()]
 selected_months = st.sidebar.multiselect("Pilih MONTH (Bulan)", options=month_options, default=[])
 
-# Filter Date (Bisa Pilih Banyak)
+# Filter Date
 date_options = sorted([int(d) for d in df_cleaned['DAY_NUM'].dropna().unique()])
 selected_dates = st.sidebar.multiselect("Pilih DATE (Tanggal)", options=date_options, default=[])
 
-# Store Filter (Bisa Pilih Banyak)
+# Store Filter
 raw_stores = df_cleaned['STORE'].dropna().unique()
 store_options = sorted([str(s) for s in raw_stores if str(s).strip() != ''])
 selected_stores = st.sidebar.multiselect("Pilih Store", options=store_options, default=[])
@@ -169,16 +174,12 @@ selected_stores = st.sidebar.multiselect("Pilih Store", options=store_options, d
 # --- PROSES FILTERING MULTISELECT ---
 df_filtered = df_cleaned.copy()
 
-# Jika list tidak kosong, lakukan filter. Jika kosong/tidak memilih, maka otomatis memuat SEMUA data.
 if selected_years:
     df_filtered = df_filtered[df_filtered['YEAR'].isin(selected_years)]
-
 if selected_months:
     df_filtered = df_filtered[df_filtered['MONTH_NAME'].isin(selected_months)]
-
 if selected_dates:
     df_filtered = df_filtered[df_filtered['DAY_NUM'].isin(selected_dates)]
-
 if selected_stores:
     df_filtered = df_filtered[df_filtered['STORE'].isin(selected_stores)]
 
@@ -233,14 +234,15 @@ st.markdown("<div class='section-title'>Visualisasi Performa</div>", unsafe_allo
 row1_col1, row1_col2 = st.columns(2)
 
 with row1_col1:
-    st.markdown("<b style='color:#212529;'>Perbandingan Sales Tahun 2025 vs 2026</b>", unsafe_allow_html=True)
-    df_sales_yr = df_filtered[df_filtered['YEAR'].isin([2025, 2026])].groupby('YEAR')['SALES'].sum().reset_index()
+    # PERBAIKAN: Perbandingan Sales 2024 vs 2025 vs 2026
+    st.markdown("<b style='color:#212529;'>Perbandingan Sales Tahun 2024 vs 2025 vs 2026</b>", unsafe_allow_html=True)
+    df_sales_yr = df_filtered[df_filtered['YEAR'].isin([2024, 2025, 2026])].groupby('YEAR')['SALES'].sum().reset_index()
     df_sales_yr['YEAR'] = df_sales_yr['YEAR'].astype(str)
     
     fig_sales = px.bar(
         df_sales_yr, x='YEAR', y='SALES',
         color='YEAR',
-        color_discrete_map={'2025': '#ffb09c', '2026': '#ff5722'},
+        color_discrete_map={'2024': '#ffccbc', '2025': '#ffb09c', '2026': '#ff5722'},
         text_auto='.2s'
     )
     fig_sales.update_layout(
@@ -251,35 +253,49 @@ with row1_col1:
     st.plotly_chart(fig_sales, use_container_width=True)
 
 with row1_col2:
-    st.markdown("<b style='color:#212529;'>Tren Ritase Berkala</b>", unsafe_allow_html=True)
-    df_ritase_trend = df_filtered.groupby('TANGGAL')['RITASE'].sum().reset_index()
+    # PERBAIKAN: Tren Ritase Berkala Bulanan 2024 vs 2025 vs 2026
+    st.markdown("<b style='color:#212529;'>Tren Ritase Bulanan (2024 vs 2025 vs 2026)</b>", unsafe_allow_html=True)
+    df_ritase_trend = df_filtered[df_filtered['YEAR'].isin([2024, 2025, 2026])].groupby(['YEAR', 'MONTH_NUM', 'MONTH_NAME'])['RITASE'].sum().reset_index()
+    df_ritase_trend = df_ritase_trend.sort_values(by='MONTH_NUM')
+    df_ritase_trend['YEAR'] = df_ritase_trend['YEAR'].astype(str)
     
-    fig_line = px.line(df_ritase_trend, x='TANGGAL', y='RITASE', markers=True)
-    fig_line.update_traces(line_color='#e64a19', marker=dict(size=6, color='#ff5722'))
+    fig_line = px.line(
+        df_ritase_trend, x='MONTH_NAME', y='RITASE', color='YEAR',
+        markers=True,
+        color_discrete_map={'2024': '#ffccbc', '2025': '#ffb09c', '2026': '#ff5722'}
+    )
     fig_line.update_layout(
         plot_bgcolor='white', paper_bgcolor='white',
         margin=dict(t=20, b=20, l=20, r=20),
-        xaxis_title=None, yaxis_title="Jumlah Ritase"
+        xaxis_title=None, yaxis_title="Jumlah Ritase",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     st.plotly_chart(fig_line, use_container_width=True)
 
 row2_col1, row2_col2 = st.columns(2)
 
 with row2_col1:
-    st.markdown("<b style='color:#212529;'>Distribusi Sales per Kategori Produk</b>", unsafe_allow_html=True)
-    cat_col = 'TYPE' if 'TYPE' in df_filtered.columns else 'STORE'
-    df_cat = df_filtered.groupby(cat_col)['SALES'].sum().reset_index()
+    # PERBAIKAN: Growth Sales 2024 vs 2025 vs 2026
+    st.markdown("<b style='color:#212529;'>Growth Sales (Pertumbuhan % YoY)</b>", unsafe_allow_html=True)
+    df_growth = df_filtered[df_filtered['YEAR'].isin([2024, 2025, 2026])].groupby('YEAR')['SALES'].sum().reset_index()
     
-    fig_donut = px.pie(
-        df_cat, names=cat_col, values='SALES',
-        hole=0.5,
-        color_discrete_sequence=['#ff5722', '#ff7043', '#ff8a65', '#ffab91', '#ffccbc']
+    # Hitung nilai persentase growth
+    df_growth['GROWTH_%'] = df_growth['SALES'].pct_change() * 100
+    df_growth['GROWTH_%'] = df_growth['GROWTH_%'].fillna(0) # Tahun pertama tidak ada growth
+    df_growth['YEAR'] = df_growth['YEAR'].astype(str)
+    
+    # Hanya buat grafik jika ada data setelah tahun awal
+    fig_growth = px.bar(
+        df_growth, x='YEAR', y='GROWTH_%',
+        text=df_growth['GROWTH_%'].apply(lambda x: f"{x:+.1f}%" if x != 0 else "0%"),
+        color_discrete_sequence=['#ff7043']
     )
-    fig_donut.update_layout(
+    fig_growth.update_layout(
+        plot_bgcolor='white', paper_bgcolor='white',
         margin=dict(t=20, b=20, l=20, r=20),
-        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+        xaxis_title=None, yaxis_title="Pertumbuhan (%)"
     )
-    st.plotly_chart(fig_donut, use_container_width=True)
+    st.plotly_chart(fig_growth, use_container_width=True)
 
 with row2_col2:
     st.markdown("<b style='color:#212529;'>Peringkat Sales per Store</b>", unsafe_allow_html=True)
