@@ -103,9 +103,16 @@ def load_data():
         else:
             df['ALL ONE WAY'] = 0
         
-        # Clean string categories
-        df['STORE'] = df['STORE'].astype(str).str.strip()
-        df['NOPOL'] = df['NOPOL'].astype(str).str.strip()
+        # Clean string categories & tangani data kosong/NaN agar tidak error saat di-sort
+        if 'STORE' in df.columns:
+            df['STORE'] = df['STORE'].fillna('TANPA NAMA').astype(str).str.strip()
+        else:
+            df['STORE'] = 'Unknown'
+            
+        if 'NOPOL' in df.columns:
+            df['NOPOL'] = df['NOPOL'].fillna('TANPA NOPOL').astype(str).str.strip()
+        else:
+            df['NOPOL'] = 'Unknown'
         
         return df
         
@@ -144,8 +151,10 @@ start_date, end_date = st.sidebar.date_input(
     max_value=max_date
 )
 
-# Store Filter
-store_options = ["Semua Store"] + sorted(list(df_cleaned['STORE'].unique()))
+# Store Filter (Dipastikan membuang nilai kosong/NaN dan diubah ke string murni sebelum di-sorted)
+raw_stores = df_cleaned['STORE'].dropna().unique()
+clean_stores = sorted([str(s) for s in raw_stores if str(s).strip() != ''])
+store_options = ["Semua Store"] + clean_stores
 selected_store = st.sidebar.selectbox("Pilih Store", store_options)
 
 # Filter Processing
