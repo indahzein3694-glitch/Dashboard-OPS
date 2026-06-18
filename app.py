@@ -15,7 +15,7 @@ st.set_page_config(
 # Custom Deep Orange & Gen Z CSS Style
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=400;500;600;700&display=swap');
     
     * {
         font-family: 'Plus Jakarta Sans', sans-serif;
@@ -81,11 +81,10 @@ def load_data():
         # Convert TANGGAL to datetime
         df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], errors='coerce')
         
-        # Pembersihan teks dan konversi angka pada kolom SALES
+        # PERBAIKAN UTAMA: Menghapus koma ribuan agar terbaca utuh ratusan ribu/jutaan
         if 'SALES' in df.columns:
             df['SALES'] = df['SALES'].astype(str).str.replace('Rp', '', regex=False)
-            df['SALES'] = df['SALES'].str.replace('.', '', regex=False)
-            df['SALES'] = df['SALES'].str.replace(',', '.', regex=False)
+            df['SALES'] = df['SALES'].str.replace(',', '', regex=False)  # Hapus koma ribuan dari sheet
             df['SALES'] = df['SALES'].str.strip()
             df['SALES'] = pd.to_numeric(df['SALES'], errors='coerce').fillna(0)
         else:
@@ -96,18 +95,18 @@ def load_data():
         df['YEAR'] = pd.to_numeric(df['YEAR'], errors='coerce')
         
         # Buat kolom tambahan untuk Bulan dan Tanggal (Angka Hari) demi kebutuhan filter
-        df['MONTH_NAME'] = df['TANGGAL'].dt.strftime('%B') # Nama bulan (January, February, dst)
+        df['MONTH_NAME'] = df['TANGGAL'].dt.strftime('%B')
         df['DAY_NUM'] = df['TANGGAL'].dt.day
         
-        # Siasati kolom ALL ONE WAY jika ada perbedaan spasi atau penulisan
+        # Siasati kolom ALL ONE WAY dengan pembersihan koma ribuan
         all_one_way_col = [c for c in df.columns if 'ONE WAY' in c]
         if all_one_way_col:
-            df['ALL ONE WAY'] = df[all_one_way_col[0]].astype(str).str.replace('.', '', regex=False)
+            df['ALL ONE WAY'] = df[all_one_way_col[0]].astype(str).str.replace(',', '', regex=False)
             df['ALL ONE WAY'] = pd.to_numeric(df['ALL ONE WAY'], errors='coerce').fillna(0)
         else:
             df['ALL ONE WAY'] = 0
         
-        # Clean string categories & tangani data kosong/NaN agar tidak error saat di-sort
+        # Clean string categories & tangani data kosong
         if 'STORE' in df.columns:
             df['STORE'] = df['STORE'].fillna('TANPA NAMA').astype(str).str.strip()
         else:
@@ -146,7 +145,6 @@ df_cleaned = df_raw.dropna(subset=['TANGGAL']).copy()
 st.sidebar.image("https://img.icons8.com/fluent/96/000000/dashboard.png", width=80)
 st.sidebar.markdown("<h2 style='color: #ff5722; font-weight:700;'>Filter Data</h2>", unsafe_allow_html=True)
 
-# --- FILTER BARU: YEAR, MONTH, DATE ---
 # Filter Year
 year_list = ["Semua Tahun"] + sorted([str(int(y)) for y in df_cleaned['YEAR'].dropna().unique()])
 selected_year = st.sidebar.selectbox("Pilih YEAR (Tahun)", year_list)
@@ -157,7 +155,7 @@ available_months = [m for m in month_order if m in df_cleaned['MONTH_NAME'].uniq
 month_list = ["Semua Bulan"] + available_months
 selected_month = st.sidebar.selectbox("Pilih MONTH (Bulan)", month_list)
 
-# Filter Date (Tanggal 1-31)
+# Filter Date
 date_list = ["Semua Tanggal"] + sorted([str(int(d)) for d in df_cleaned['DAY_NUM'].dropna().unique()])
 selected_date = st.sidebar.selectbox("Pilih DATE (Tanggal)", date_list)
 
