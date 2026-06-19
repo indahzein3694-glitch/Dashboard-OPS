@@ -15,7 +15,7 @@ st.set_page_config(
 # Custom Deep Orange & Gen Z CSS Style
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
     
     * {
         font-family: 'Plus Jakarta Sans', sans-serif;
@@ -288,11 +288,12 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
         st.markdown("<h1 style='color: #ff5722; font-weight:800; margin-bottom: 5px;'>PENGELUARAN OPERASIONAL</h1>", unsafe_allow_html=True)
         st.markdown("<p style='color: #6c757d; font-size: 15px; margin-bottom: 25px;'>Operasional ASG • Real-time Cost Tracking</p>", unsafe_allow_html=True)
         
-        # Perhitungan Ringkasan KPI Pengeluaran
+        # --- PERBAIKAN: Perhitungan Ringkasan KPI ---
         total_debit = df_exp_filtered['DEBIT'].sum()
         
-        # Perhitungan COUNTA Nopol Aktif (Jumlah baris dengan NOPOL yang terisi)
-        counta_nopol = df_exp_filtered[df_exp_filtered['NOPOL'].str.upper() != 'TANPA NOPOL']['NOPOL'].count()
+        # PERBAIKAN FORMULA NOPOL: Menghitung Nopol Unik/Berbeda yang Aktif (Bukan hitung total baris)
+        df_valid_nopol = df_exp_filtered[(df_exp_filtered['NOPOL'].str.upper() != 'TANPA NOPOL') & (df_exp_filtered['NOPOL'].str.strip() != '')]
+        unique_nopol_count = df_valid_nopol['NOPOL'].nunique()
         
         # Render Kartu KPI Pengeluaran
         exp_kpi1, exp_kpi2 = st.columns(2)
@@ -306,8 +307,8 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
         with exp_kpi2:
             st.markdown(f"""
                 <div class="kpi-card">
-                    <div class="kpi-title">Total Nopol Aktif (CountA)</div>
-                    <div class="kpi-value">{counta_nopol:,.0f} <span style='font-size:14px; font-weight:400; color:#6c757d;'>Armada Kontribusi</span></div>
+                    <div class="kpi-title">Total Nopol Aktif</div>
+                    <div class="kpi-value">{unique_nopol_count:,.0f} <span style='font-size:14px; font-weight:400; color:#6c757d;'>Unit Armada</span></div>
                 </div>
             """, unsafe_allow_html=True)
             
@@ -336,10 +337,23 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
         df_list_tabel = df_exp_filtered.groupby(['NAMA', 'NOPOL'])['DEBIT'].sum().reset_index().sort_values(by='DEBIT', ascending=False)
         df_list_tabel.columns = ['NAMA PERSONEL', 'NOMOR POLISI (NOPOL)', 'TOTAL PENGELUARAN (DEBIT)']
         
-        # Formatting tampilan nominal uang agar rapi di tabel Streamlit
-        df_list_tabel['TOTAL PENGELUARAN (DEBIT)'] = df_list_tabel['TOTAL PENGELUARAN (DEBIT)'].apply(lambda x: f"Rp {x:,.0f}")
+        # Simpan data asli mentah (dalam bentuk angka) untuk didownload agar Excel membacanya sebagai angka baku
+        csv_buffer = df_list_tabel.to_csv(index=False).encode('utf-8')
         
-        st.dataframe(df_list_tabel, use_container_width=True, hide_index=True)
+        # Formatting tampilan nominal uang di layar aplikasi agar cantik pakai rupiah
+        df_list_display = df_list_tabel.copy()
+        df_list_display['TOTAL PENGELUARAN (DEBIT)'] = df_list_display['TOTAL PENGELUARAN (DEBIT)'].apply(lambda x: f"Rp {x:,.0f}")
+        
+        # Tampilkan tabel di web dashboard
+        st.dataframe(df_list_display, use_container_width=True, hide_index=True)
+        
+        # --- PERBAIKAN: Tombol Download Data ---
+        st.download_button(
+            label="📥 Download Data List (CSV Excel)",
+            data=csv_buffer,
+            file_name=f"data_pengeluaran_asg_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+        )
 
 # Footer Aplikasi
 st.markdown("<hr style='border: 0.5px solid rgba(235, 94, 40, 0.1);'>", unsafe_allow_html=True)
