@@ -104,7 +104,7 @@ def load_sales_data():
     except Exception as e:
         return pd.DataFrame()
 
-# --- Fungsi Load Data 2: PENGELUARAN (SPREADSHEET BARU) ---
+# --- Fungsi Load Data 2: PENGELUARAN BARU (PERBAIKAN LOGIKA TANGGAL) ---
 @st.cache_data(ttl=600)
 def load_expense_data():
     sheet_id = "1ODK1VYWR6xtFGmpo6CYaLdtzucw2d4uKFDibj8DU3OE"
@@ -114,16 +114,16 @@ def load_expense_data():
         df = pd.read_csv(url)
         df.columns = [c.strip().upper() for c in df.columns]
         
-        # PERBAIKAN FORMAT TANGGAL: Memaksa baca hari di depan (DD/MM/YYYY) agar tanggal di atas 12 tidak error
-        df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], dayfirst=True, format='%d/%m/%Y', errors='coerce')
+        # 1. Ubah teks menjadi format Tanggal terlebih dahulu (Format Indonesia: dayfirst=True)
+        df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], dayfirst=True, errors='coerce')
         
-        df['YEAR'] = df['TANGGAL'].dt.year
-        df['MONTH_NAME'] = df['TANGGAL'].dt.strftime('%B')
-        df['DAY_NUM'] = df['TANGGAL'].dt.day
-        
+        # 2. Setelah diubah ke objek tanggal, baru buang baris kosong atau NaT (Bukan Tanggal Resmi)
         df = df.dropna(subset=['TANGGAL']).copy()
-        df['YEAR'] = df['YEAR'].astype(int)
-        df['DAY_NUM'] = df['DAY_NUM'].astype(int)
+        
+        # 3. Ekstrak info Tahun, Bulan, dan Hari setelah datanya bersih
+        df['YEAR'] = df['TANGGAL'].dt.year.astype(int)
+        df['MONTH_NAME'] = df['TANGGAL'].dt.strftime('%B')
+        df['DAY_NUM'] = df['TANGGAL'].dt.day.astype(int)
         
         # Bersihkan kolom DEBIT
         if 'DEBIT' in df.columns:
@@ -217,7 +217,6 @@ if menu_pilihan == "📊 Performa Operasional ASG":
             df_sales_yr = df_filtered[df_filtered['YEAR'].isin([2024, 2025, 2026])].groupby('YEAR')['SALES'].sum().reset_index()
             df_sales_yr['YEAR'] = df_sales_yr['YEAR'].astype(str)
             
-            # FORMAT FULL ANGKA (,d)
             fig_sales = px.bar(df_sales_yr, x='YEAR', y='SALES', color='YEAR', color_discrete_map={'2024': '#ffccbc', '2025': '#ffb09c', '2026': '#ff5722'}, text_auto=',d')
             fig_sales.update_layout(plot_bgcolor='white', paper_bgcolor='white', margin=dict(t=20, b=20, l=20, r=20), showlegend=False, xaxis_title=None, yaxis_title="Total Sales (Rp)", yaxis=dict(tickformat=",d"))
             st.plotly_chart(fig_sales, use_container_width=True)
@@ -243,7 +242,6 @@ if menu_pilihan == "📊 Performa Operasional ASG":
             st.markdown("<b style='color:#212529;'>Peringkat Sales per Store</b>", unsafe_allow_html=True)
             df_store_sales = df_filtered.groupby('STORE')['SALES'].sum().reset_index().sort_values(by='SALES', ascending=True)
             
-            # FORMAT FULL ANGKA (,d)
             fig_horiz = px.bar(df_store_sales, x='SALES', y='STORE', orientation='h', text_auto=',d')
             fig_horiz.update_traces(marker_color='#ff7043')
             fig_horiz.update_layout(plot_bgcolor='white', paper_bgcolor='white', margin=dict(t=20, b=20, l=20, r=20), xaxis_title="Total Sales (Rp)", yaxis_title=None, xaxis=dict(tickformat=",d"))
@@ -347,7 +345,6 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
             st.markdown("<b style='color:#212529;'>Pengeluaran Terbesar per Store</b>", unsafe_allow_html=True)
             df_store_cost = df_exp_filtered.groupby('STORE')['DEBIT'].sum().reset_index().sort_values(by='DEBIT', ascending=True)
             
-            # Format label batangan full (,d)
             fig_store_bar = px.bar(df_store_cost, x='DEBIT', y='STORE', orientation='h', text_auto=',d')
             fig_store_bar.update_traces(marker_color='#ff7043')
             fig_store_bar.update_layout(
@@ -363,7 +360,6 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
         # DATA LIST TABULAR
         st.markdown("<div class='section-title'>Data List Pengeluaran</div>", unsafe_allow_html=True)
         
-        # Judul kolom tabel bawah: TOTAL PENGELUARAN
         df_list_tabel = df_exp_filtered.groupby(['NAMA', 'NOPOL'])['DEBIT'].sum().reset_index().sort_values(by='DEBIT', ascending=False)
         df_list_tabel.columns = ['NAMA PERSONEL', 'NOMOR POLISI (NOPOL)', 'TOTAL PENGELUARAN']
         
