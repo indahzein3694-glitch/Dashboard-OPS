@@ -114,8 +114,8 @@ def load_expense_data():
         df = pd.read_csv(url)
         df.columns = [c.strip().upper() for c in df.columns]
         
-        # Format tanggal agar terbaca sempurna
-        df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], dayfirst=True, errors='coerce')
+        # PERBAIKAN FORMAT TANGGAL: Memaksa baca hari di depan (DD/MM/YYYY) agar tanggal di atas 12 tidak error
+        df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], dayfirst=True, format='%d/%m/%Y', errors='coerce')
         
         df['YEAR'] = df['TANGGAL'].dt.year
         df['MONTH_NAME'] = df['TANGGAL'].dt.strftime('%B')
@@ -217,7 +217,7 @@ if menu_pilihan == "📊 Performa Operasional ASG":
             df_sales_yr = df_filtered[df_filtered['YEAR'].isin([2024, 2025, 2026])].groupby('YEAR')['SALES'].sum().reset_index()
             df_sales_yr['YEAR'] = df_sales_yr['YEAR'].astype(str)
             
-            # FORMAT FULL ANGKA
+            # FORMAT FULL ANGKA (,d)
             fig_sales = px.bar(df_sales_yr, x='YEAR', y='SALES', color='YEAR', color_discrete_map={'2024': '#ffccbc', '2025': '#ffb09c', '2026': '#ff5722'}, text_auto=',d')
             fig_sales.update_layout(plot_bgcolor='white', paper_bgcolor='white', margin=dict(t=20, b=20, l=20, r=20), showlegend=False, xaxis_title=None, yaxis_title="Total Sales (Rp)", yaxis=dict(tickformat=",d"))
             st.plotly_chart(fig_sales, use_container_width=True)
@@ -243,7 +243,7 @@ if menu_pilihan == "📊 Performa Operasional ASG":
             st.markdown("<b style='color:#212529;'>Peringkat Sales per Store</b>", unsafe_allow_html=True)
             df_store_sales = df_filtered.groupby('STORE')['SALES'].sum().reset_index().sort_values(by='SALES', ascending=True)
             
-            # PERBAIKAN GRAFIK SALES: Teks label batangan dan sumbu X diganti nominal full (,d) bukan singkatan SALES/M
+            # FORMAT FULL ANGKA (,d)
             fig_horiz = px.bar(df_store_sales, x='SALES', y='STORE', orientation='h', text_auto=',d')
             fig_horiz.update_traces(marker_color='#ff7043')
             fig_horiz.update_layout(plot_bgcolor='white', paper_bgcolor='white', margin=dict(t=20, b=20, l=20, r=20), xaxis_title="Total Sales (Rp)", yaxis_title=None, xaxis=dict(tickformat=",d"))
