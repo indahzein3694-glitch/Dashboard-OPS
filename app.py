@@ -304,12 +304,12 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
         df_valid_nopol = df_exp_filtered[(df_exp_filtered['NOPOL'].str.upper() != 'TANPA NOPOL') & (df_exp_filtered['NOPOL'].str.strip() != '')]
         unique_nopol_count = df_valid_nopol['NOPOL'].nunique()
         
-        # Render Kartu KPI Pengeluaran
+        # Render Kartu KPI Pengeluaran (PERBAIKAN: Mengganti teks Debit All menjadi Total Pengeluaran)
         exp_kpi1, exp_kpi2 = st.columns(2)
         with exp_kpi1:
             st.markdown(f"""
                 <div class="kpi-card">
-                    <div class="kpi-title">Total Pengeluaran (Debit All)</div>
+                    <div class="kpi-title">Total Pengeluaran</div>
                     <div class="kpi-value">Rp {total_debit:,.0f}</div>
                 </div>
             """, unsafe_allow_html=True)
@@ -330,7 +330,7 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
             fig_cost_line = px.line(df_day_cost, x='TANGGAL', y='DEBIT', markers=True)
             fig_cost_line.update_traces(line_color='#d84315', marker=dict(color='#ff5722'))
             
-            # PERBAIKAN GRAFIK: Ganti nama sumbu y menjadi "Total (Rp)" dan tampilkan nominal angka full tanpa singkatan M
+            # PERBAIKAN GRAFIK TREN: Judul Sumbu Y diubah dari DEBIT menjadi Total (Rp)
             fig_cost_line.update_layout(
                 plot_bgcolor='white', 
                 paper_bgcolor='white', 
@@ -345,11 +345,11 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
             st.markdown("<b style='color:#212529;'>Pengeluaran Terbesar per Store</b>", unsafe_allow_html=True)
             df_store_cost = df_exp_filtered.groupby('STORE')['DEBIT'].sum().reset_index().sort_values(by='DEBIT', ascending=True)
             
-            # PERBAIKAN GRAFIK: Teks label batangan diganti teks angka full, bukan singkatan (.2s -> ,d)
+            # Format label angka batangan full (,d)
             fig_store_bar = px.bar(df_store_cost, x='DEBIT', y='STORE', orientation='h', text_auto=',d')
             fig_store_bar.update_traces(marker_color='#ff7043')
             
-            # PERBAIKAN GRAFIK: Ganti sumbu x menjadi "Total (Rp)" dan format angka full tanpa singkatan M
+            # Format sumbu X angka full (,d)
             fig_store_bar.update_layout(
                 plot_bgcolor='white', 
                 paper_bgcolor='white', 
@@ -363,7 +363,7 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
         # DATA LIST TABULAR
         st.markdown("<div class='section-title'>Data List Pengeluaran</div>", unsafe_allow_html=True)
         
-        # PERBAIKAN TABEL: Judul kolom DEBIT diubah secara resmi menjadi TOTAL PENGELUARAN
+        # Judul kolom tabel bawah: TOTAL PENGELUARAN
         df_list_tabel = df_exp_filtered.groupby(['NAMA', 'NOPOL'])['DEBIT'].sum().reset_index().sort_values(by='DEBIT', ascending=False)
         df_list_tabel.columns = ['NAMA PERSONEL', 'NOMOR POLISI (NOPOL)', 'TOTAL PENGELUARAN']
         
