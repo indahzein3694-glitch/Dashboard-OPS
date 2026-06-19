@@ -68,7 +68,7 @@ st.markdown("""
 
 # 2. DATA LOADING FUNCTIONS
 
-# --- Fungsi Load Data 1: PERFORMA SALES & RITASE ---
+# --- Fungsi Load Data 1: PERFORMA SALES & RITASE (PERBAIKAN DATE) ---
 @st.cache_data(ttl=600)
 def load_sales_data():
     sheet_id = "1Z3sGqENFtjF-gGsRuN4lLUhmGZa5X1AbVx8Ueu-63YQ"
@@ -77,7 +77,10 @@ def load_sales_data():
     try:
         df = pd.read_csv(url)
         df.columns = [c.strip().upper() for c in df.columns]
-        df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], errors='coerce')
+        
+        # PERBAIKAN: Ubah teks jadi Tanggal dengan format Indonesia dahulu sebelum dropna
+        df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], dayfirst=True, errors='coerce')
+        df = df.dropna(subset=['TANGGAL']).copy()
         
         if 'SALES' in df.columns:
             df['SALES'] = df['SALES'].astype(str).str.replace('Rp', '', regex=False).str.replace(',', '', regex=False).str.strip()
@@ -86,10 +89,10 @@ def load_sales_data():
             df['SALES'] = 0
             
         df['RITASE'] = pd.to_numeric(df['RITASE'], errors='coerce').fillna(0)
-        df['YEAR'] = pd.to_numeric(df['YEAR'], errors='coerce').fillna(df['TANGGAL'].dt.year).fillna(0).astype(int)
+        df['YEAR'] = df['TANGGAL'].dt.year.astype(int)
         df['MONTH_NAME'] = df['TANGGAL'].dt.strftime('%B')
         df['MONTH_NUM'] = df['TANGGAL'].dt.month
-        df['DAY_NUM'] = df['TANGGAL'].dt.day
+        df['DAY_NUM'] = df['TANGGAL'].dt.day.astype(int)
         
         all_one_way_col = [c for c in df.columns if 'ONE WAY' in c]
         if all_one_way_col:
@@ -104,7 +107,7 @@ def load_sales_data():
     except Exception as e:
         return pd.DataFrame()
 
-# --- Fungsi Load Data 2: PENGELUARAN BARU (PERBAIKAN LOGIKA TANGGAL) ---
+# --- Fungsi Load Data 2: PENGELUARAN (PERBAIKAN DATE) ---
 @st.cache_data(ttl=600)
 def load_expense_data():
     sheet_id = "1ODK1VYWR6xtFGmpo6CYaLdtzucw2d4uKFDibj8DU3OE"
@@ -114,13 +117,10 @@ def load_expense_data():
         df = pd.read_csv(url)
         df.columns = [c.strip().upper() for c in df.columns]
         
-        # 1. Ubah teks menjadi format Tanggal terlebih dahulu (Format Indonesia: dayfirst=True)
+        # PERBAIKAN: Ubah teks jadi Tanggal dengan format Indonesia dahulu sebelum dropna
         df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], dayfirst=True, errors='coerce')
-        
-        # 2. Setelah diubah ke objek tanggal, baru buang baris kosong atau NaT (Bukan Tanggal Resmi)
         df = df.dropna(subset=['TANGGAL']).copy()
         
-        # 3. Ekstrak info Tahun, Bulan, dan Hari setelah datanya bersih
         df['YEAR'] = df['TANGGAL'].dt.year.astype(int)
         df['MONTH_NAME'] = df['TANGGAL'].dt.strftime('%B')
         df['DAY_NUM'] = df['TANGGAL'].dt.day.astype(int)
@@ -170,7 +170,7 @@ if menu_pilihan == "📊 Performa Operasional ASG":
         month_options = [m for m in month_order if m in df_cleaned['MONTH_NAME'].unique()]
         selected_months = st.sidebar.multiselect("Pilih MONTH (Bulan)", options=month_options, default=[])
         
-        date_options = sorted([int(d) for d in df_cleaned['DAY_NUM'].dropna().unique()])
+        date_options = sorted([int(d) for d in df_cleaned['DAY_NUM'].unique() if d > 0])
         selected_dates = st.sidebar.multiselect("Pilih DATE (Tanggal)", options=date_options, default=[])
         
         store_options = sorted([str(s) for s in df_cleaned['STORE'].unique() if str(s).strip() != ''])
