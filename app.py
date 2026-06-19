@@ -114,15 +114,13 @@ def load_expense_data():
         df = pd.read_csv(url)
         df.columns = [c.strip().upper() for c in df.columns]
         
-        # PERBAIKAN UTAMA: Pakai dayfirst=True & coerce agar format tanggal terbaca sempurna
+        # Format tanggal agar terbaca sempurna
         df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], dayfirst=True, errors='coerce')
         
-        # Ekstrak waktu kembali dengan penanganan fillna agar tidak kosong/0 di filter
         df['YEAR'] = df['TANGGAL'].dt.year
         df['MONTH_NAME'] = df['TANGGAL'].dt.strftime('%B')
         df['DAY_NUM'] = df['TANGGAL'].dt.day
         
-        # Bersihkan data kosong akibat error parse tanggal baku
         df = df.dropna(subset=['TANGGAL']).copy()
         df['YEAR'] = df['YEAR'].astype(int)
         df['DAY_NUM'] = df['DAY_NUM'].astype(int)
@@ -261,7 +259,7 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
         st.markdown("<h1 style='color: #ff5722; font-weight:800; margin-bottom: 5px;'>PENGELUARAN OPERASIONAL</h1>", unsafe_allow_html=True)
         st.markdown("<p style='color: #6c757d; font-size: 15px; margin-bottom: 25px;'>Operasional ASG • Real-time Cost Tracking</p>", unsafe_allow_html=True)
         
-        # PERBAIKAN POSISI: Filter diletakkan di bagian atas halaman utama secara horizontal agar rapi
+        # Panel Filter
         st.markdown("<b style='color:#ff5722;'>⚙️ PANEL FILTER DATA PENGELUARAN</b>", unsafe_allow_html=True)
         f_col1, f_col2, f_col3 = st.columns(3)
         
@@ -331,27 +329,48 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
             df_day_cost = df_exp_filtered.groupby('TANGGAL')['DEBIT'].sum().reset_index()
             fig_cost_line = px.line(df_day_cost, x='TANGGAL', y='DEBIT', markers=True)
             fig_cost_line.update_traces(line_color='#d84315', marker=dict(color='#ff5722'))
-            fig_cost_line.update_layout(plot_bgcolor='white', paper_bgcolor='white', margin=dict(t=20, b=20, l=20, r=20), xaxis_title=None, yaxis_title="Total Debit (Rp)")
+            
+            # PERBAIKAN GRAFIK: Ganti nama sumbu y menjadi "Total (Rp)" dan tampilkan nominal angka full tanpa singkatan M
+            fig_cost_line.update_layout(
+                plot_bgcolor='white', 
+                paper_bgcolor='white', 
+                margin=dict(t=20, b=20, l=20, r=20), 
+                xaxis_title=None, 
+                yaxis_title="Total (Rp)",
+                yaxis=dict(tickformat=",d")
+            )
             st.plotly_chart(fig_cost_line, use_container_width=True)
+            
         with col_g2:
             st.markdown("<b style='color:#212529;'>Pengeluaran Terbesar per Store</b>", unsafe_allow_html=True)
             df_store_cost = df_exp_filtered.groupby('STORE')['DEBIT'].sum().reset_index().sort_values(by='DEBIT', ascending=True)
-            fig_store_bar = px.bar(df_store_cost, x='DEBIT', y='STORE', orientation='h', text_auto='.2s')
+            
+            # PERBAIKAN GRAFIK: Teks label batangan diganti teks angka full, bukan singkatan (.2s -> ,d)
+            fig_store_bar = px.bar(df_store_cost, x='DEBIT', y='STORE', orientation='h', text_auto=',d')
             fig_store_bar.update_traces(marker_color='#ff7043')
-            fig_store_bar.update_layout(plot_bgcolor='white', paper_bgcolor='white', margin=dict(t=20, b=20, l=20, r=20), xaxis_title="Total Debit (Rp)", yaxis_title=None)
+            
+            # PERBAIKAN GRAFIK: Ganti sumbu x menjadi "Total (Rp)" dan format angka full tanpa singkatan M
+            fig_store_bar.update_layout(
+                plot_bgcolor='white', 
+                paper_bgcolor='white', 
+                margin=dict(t=20, b=20, l=20, r=20), 
+                xaxis_title="Total (Rp)", 
+                yaxis_title=None,
+                xaxis=dict(tickformat=",d")
+            )
             st.plotly_chart(fig_store_bar, use_container_width=True)
             
         # DATA LIST TABULAR
         st.markdown("<div class='section-title'>Data List Pengeluaran</div>", unsafe_allow_html=True)
         
-        # Membuat List Ringkasan Berisi: Nama, Nopol, Total Pengeluaran (Debit)
+        # PERBAIKAN TABEL: Judul kolom DEBIT diubah secara resmi menjadi TOTAL PENGELUARAN
         df_list_tabel = df_exp_filtered.groupby(['NAMA', 'NOPOL'])['DEBIT'].sum().reset_index().sort_values(by='DEBIT', ascending=False)
-        df_list_tabel.columns = ['NAMA PERSONEL', 'NOMOR POLISI (NOPOL)', 'TOTAL PENGELUARAN (DEBIT)']
+        df_list_tabel.columns = ['NAMA PERSONEL', 'NOMOR POLISI (NOPOL)', 'TOTAL PENGELUARAN']
         
         csv_buffer = df_list_tabel.to_csv(index=False).encode('utf-8')
         
         df_list_display = df_list_tabel.copy()
-        df_list_display['TOTAL PENGELUARAN (DEBIT)'] = df_list_display['TOTAL PENGELUARAN (DEBIT)'].apply(lambda x: f"Rp {x:,.0f}")
+        df_list_display['TOTAL PENGELUARAN'] = df_list_display['TOTAL PENGELUARAN'].apply(lambda x: f"Rp {x:,.0f}")
         
         st.dataframe(df_list_display, use_container_width=True, hide_index=True)
         
