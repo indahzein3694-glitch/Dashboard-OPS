@@ -68,7 +68,7 @@ st.markdown("""
 
 # 2. DATA LOADING FUNCTIONS
 
-# --- Fungsi Load Data 1: PERFORMA SALES & RITASE (PERBAIKAN DATE) ---
+# --- Fungsi Load Data 1: PERFORMA SALES & RITASE ---
 @st.cache_data(ttl=600)
 def load_sales_data():
     sheet_id = "1Z3sGqENFtjF-gGsRuN4lLUhmGZa5X1AbVx8Ueu-63YQ"
@@ -78,7 +78,6 @@ def load_sales_data():
         df = pd.read_csv(url)
         df.columns = [c.strip().upper() for c in df.columns]
         
-        # PERBAIKAN: Ubah teks jadi Tanggal dengan format Indonesia dahulu sebelum dropna
         df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], dayfirst=True, errors='coerce')
         df = df.dropna(subset=['TANGGAL']).copy()
         
@@ -101,13 +100,25 @@ def load_sales_data():
         else:
             df['ALL ONE WAY'] = 0
             
-        df['STORE'] = df['STORE'].fillna('TANPA NAMA').astype(str).str.strip()
+        # PENANGANAN NO INVOICE SEBAGAI NAMA STORE
+        if 'NO INVOICE' in df.columns:
+            df['STORE'] = df['NO INVOICE'].fillna('TANPA NAMA').astype(str).str.strip().str.upper()
+        elif 'STORE' in df.columns:
+            df['STORE'] = df['STORE'].fillna('TANPA NAMA').astype(str).str.strip().str.upper()
+        else:
+            df['STORE'] = 'TANPA NAMA'
+            
+        # PERBAIKAN: Buang baris jika nama store kosong, hanya spasi, atau bernilai 'TANPA NAMA'
+        df = df[df['STORE'].str.strip() != ''].copy()
+        df = df[df['STORE'] != 'TANPA NAMA'].copy()
+        df = df[df['STORE'] != 'NAN'].copy()
+            
         df['NOPOL'] = df['NOPOL'].fillna('TANPA NOPOL').astype(str).str.strip()
         return df
     except Exception as e:
         return pd.DataFrame()
 
-# --- Fungsi Load Data 2: PENGELUARAN (PERBAIKAN DATE) ---
+# --- Fungsi Load Data 2: PENGELUARAN ---
 @st.cache_data(ttl=600)
 def load_expense_data():
     sheet_id = "1ODK1VYWR6xtFGmpo6CYaLdtzucw2d4uKFDibj8DU3OE"
@@ -117,7 +128,6 @@ def load_expense_data():
         df = pd.read_csv(url)
         df.columns = [c.strip().upper() for c in df.columns]
         
-        # PERBAIKAN: Ubah teks jadi Tanggal dengan format Indonesia dahulu sebelum dropna
         df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], dayfirst=True, errors='coerce')
         df = df.dropna(subset=['TANGGAL']).copy()
         
@@ -125,14 +135,19 @@ def load_expense_data():
         df['MONTH_NAME'] = df['TANGGAL'].dt.strftime('%B')
         df['DAY_NUM'] = df['TANGGAL'].dt.day.astype(int)
         
-        # Bersihkan kolom DEBIT
         if 'DEBIT' in df.columns:
             df['DEBIT'] = df['DEBIT'].astype(str).str.replace('Rp', '', regex=False).str.replace(',', '', regex=False).str.strip()
             df['DEBIT'] = pd.to_numeric(df['DEBIT'], errors='coerce').fillna(0)
         else:
             df['DEBIT'] = 0
             
-        df['STORE'] = df['STORE'].fillna('TANPA NAMA').astype(str).str.strip()
+        df['STORE'] = df['STORE'].fillna('TANPA NAMA').astype(str).str.strip().str.upper()
+        
+        # PERBAIKAN: Buang baris jika nama store pengeluaran kosong atau bernilai 'TANPA NAMA'
+        df = df[df['STORE'].str.strip() != ''].copy()
+        df = df[df['STORE'] != 'TANPA NAMA'].copy()
+        df = df[df['STORE'] != 'NAN'].copy()
+        
         df['NOPOL'] = df['NOPOL'].fillna('TANPA NOPOL').astype(str).str.strip()
         df['NAMA'] = df['NAMA'].fillna('TANPA NAMA').astype(str).str.strip()
         return df
@@ -157,6 +172,7 @@ st.sidebar.markdown("<hr style='border: 0.5px solid rgba(235, 94, 40, 0.1);'>", 
 # ==========================================
 if menu_pilihan == "📊 Performa Operasional ASG":
     df_cleaned = load_sales_data()
+    df_expense_back = load_expense_data()
     
     if df_cleaned.empty:
         st.error("Gagal mengambil data Sales & Ritase. Pastikan spreadsheet diatur ke Publik.")
@@ -176,16 +192,26 @@ if menu_pilihan == "📊 Performa Operasional ASG":
         store_options = sorted([str(s) for s in df_cleaned['STORE'].unique() if str(s).strip() != ''])
         selected_stores = st.sidebar.multiselect("Pilih Store", options=store_options, default=[])
         
-        # Filter Process
+        # Filter Proses Laporan Sales
         df_filtered = df_cleaned.copy()
+        df_exp_filtered_back = df_expense_back.copy() if not df_expense_back.empty else pd.DataFrame()
+        
         if selected_years:
             df_filtered = df_filtered[df_filtered['YEAR'].isin(selected_years)]
+            if not df_exp_filtered_back.empty:
+                df_exp_filtered_back = df_exp_filtered_back[df_exp_filtered_back['YEAR'].isin(selected_years)]
         if selected_months:
             df_filtered = df_filtered[df_filtered['MONTH_NAME'].isin(selected_months)]
+            if not df_exp_filtered_back.empty:
+                df_exp_filtered_back = df_exp_filtered_back[df_exp_filtered_back['MONTH_NAME'].isin(selected_months)]
         if selected_dates:
             df_filtered = df_filtered[df_filtered['DAY_NUM'].isin(selected_dates)]
+            if not df_exp_filtered_back.empty:
+                df_exp_filtered_back = df_exp_filtered_back[df_exp_filtered_back['DAY_NUM'].isin(selected_dates)]
         if selected_stores:
             df_filtered = df_filtered[df_filtered['STORE'].isin(selected_stores)]
+            if not df_exp_filtered_back.empty:
+                df_exp_filtered_back = df_exp_filtered_back[df_exp_filtered_back['STORE'].isin(selected_stores)]
             
         # Header Section
         st.markdown("<h1 style='color: #ff5722; font-weight:800; margin-bottom: 5px;'>SALES & RITASE DASHBOARD</h1>", unsafe_allow_html=True)
@@ -211,6 +237,32 @@ if menu_pilihan == "📊 Performa Operasional ASG":
             st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total All One Way</div><div class="kpi-value">{total_all_one_way:,.0f} <span style="font-size:14px; font-weight:400; color:#6c757d;">KM</span></div></div>', unsafe_allow_html=True)
             
         st.markdown("<div class='section-title'>Visualisasi Performa</div>", unsafe_allow_html=True)
+        
+        # GRAFIK: PERBANDINGAN SALES VS PENGELUARAN PER STORE
+        st.markdown("<b style='color:#212529;'>📊 Perbandingan Total Sales vs Total Pengeluaran per Store</b>", unsafe_allow_html=True)
+        df_sales_by_store = df_filtered.groupby('STORE')['SALES'].sum().reset_index()
+        
+        if not df_exp_filtered_back.empty:
+            df_exp_by_store = df_exp_filtered_back.groupby('STORE')['DEBIT'].sum().reset_index()
+            df_merged_store = pd.merge(df_sales_by_store, df_exp_by_store, on='STORE', how='outer').fillna(0)
+        else:
+            df_merged_store = df_sales_by_store.copy()
+            df_merged_store['DEBIT'] = 0
+            
+        df_merged_store.columns = ['STORE', 'TOTAL SALES', 'TOTAL PENGELUARAN']
+        
+        # Tambahan filter agar di grafik gabungan tidak muncul baris kosong hantu
+        df_merged_store = df_merged_store[df_merged_store['STORE'].str.strip() != ''].copy()
+        df_merged_store = df_merged_store[df_merged_store['STORE'] != 'TANPA NAMA'].copy()
+        
+        df_melted = df_merged_store.melt(id_vars=['STORE'], value_vars=['TOTAL SALES', 'TOTAL PENGELUARAN'], var_name='KATEGORI', value_name='NOMINAL')
+        
+        fig_vs = px.bar(df_melted, x='STORE', y='NOMINAL', color='KATEGORI', barmode='group', text_auto=',d', color_discrete_map={'TOTAL SALES': '#ff5722', 'TOTAL PENGELUARAN': '#4caf50'})
+        fig_vs.update_layout(plot_bgcolor='white', paper_bgcolor='white', margin=dict(t=30, b=20, l=20, r=20), xaxis_title=None, yaxis_title="Rupiah (Rp)", yaxis=dict(tickformat=",d"), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=None))
+        st.plotly_chart(fig_vs, use_container_width=True)
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
         row1_col1, row1_col2 = st.columns(2)
         with row1_col1:
             st.markdown("<b style='color:#212529;'>Perbandingan Sales Tahun 2024 vs 2025 vs 2026</b>", unsafe_allow_html=True)
@@ -379,4 +431,3 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
 
 # Footer Aplikasi
 st.markdown("<hr style='border: 0.5px solid rgba(235, 94, 40, 0.1);'>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #a0aec0; font-size: 12px;'>Dashboard Multi-Spreadsheet • Built with Streamlit & Bootstrap layout style</p>", unsafe_allow_html=True)
