@@ -216,8 +216,10 @@ if menu_pilihan == "📊 Performa Operasional ASG":
             st.markdown("<b style='color:#212529;'>Perbandingan Sales Tahun 2024 vs 2025 vs 2026</b>", unsafe_allow_html=True)
             df_sales_yr = df_filtered[df_filtered['YEAR'].isin([2024, 2025, 2026])].groupby('YEAR')['SALES'].sum().reset_index()
             df_sales_yr['YEAR'] = df_sales_yr['YEAR'].astype(str)
-            fig_sales = px.bar(df_sales_yr, x='YEAR', y='SALES', color='YEAR', color_discrete_map={'2024': '#ffccbc', '2025': '#ffb09c', '2026': '#ff5722'}, text_auto='.2s')
-            fig_sales.update_layout(plot_bgcolor='white', paper_bgcolor='white', margin=dict(t=20, b=20, l=20, r=20), showlegend=False, xaxis_title=None, yaxis_title="Total Sales (Rp)")
+            
+            # FORMAT FULL ANGKA
+            fig_sales = px.bar(df_sales_yr, x='YEAR', y='SALES', color='YEAR', color_discrete_map={'2024': '#ffccbc', '2025': '#ffb09c', '2026': '#ff5722'}, text_auto=',d')
+            fig_sales.update_layout(plot_bgcolor='white', paper_bgcolor='white', margin=dict(t=20, b=20, l=20, r=20), showlegend=False, xaxis_title=None, yaxis_title="Total Sales (Rp)", yaxis=dict(tickformat=",d"))
             st.plotly_chart(fig_sales, use_container_width=True)
         with row1_col2:
             st.markdown("<b style='color:#212529;'>Tren Ritase Bulanan (2024 vs 2025 vs 2026)</b>", unsafe_allow_html=True)
@@ -240,9 +242,11 @@ if menu_pilihan == "📊 Performa Operasional ASG":
         with row2_col2:
             st.markdown("<b style='color:#212529;'>Peringkat Sales per Store</b>", unsafe_allow_html=True)
             df_store_sales = df_filtered.groupby('STORE')['SALES'].sum().reset_index().sort_values(by='SALES', ascending=True)
-            fig_horiz = px.bar(df_store_sales, x='SALES', y='STORE', orientation='h', text_auto='.2s')
+            
+            # PERBAIKAN GRAFIK SALES: Teks label batangan dan sumbu X diganti nominal full (,d) bukan singkatan SALES/M
+            fig_horiz = px.bar(df_store_sales, x='SALES', y='STORE', orientation='h', text_auto=',d')
             fig_horiz.update_traces(marker_color='#ff7043')
-            fig_horiz.update_layout(plot_bgcolor='white', paper_bgcolor='white', margin=dict(t=20, b=20, l=20, r=20), xaxis_title="Total Sales (Rp)", yaxis_title=None)
+            fig_horiz.update_layout(plot_bgcolor='white', paper_bgcolor='white', margin=dict(t=20, b=20, l=20, r=20), xaxis_title="Total Sales (Rp)", yaxis_title=None, xaxis=dict(tickformat=",d"))
             st.plotly_chart(fig_horiz, use_container_width=True)
 
 
@@ -304,7 +308,7 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
         df_valid_nopol = df_exp_filtered[(df_exp_filtered['NOPOL'].str.upper() != 'TANPA NOPOL') & (df_exp_filtered['NOPOL'].str.strip() != '')]
         unique_nopol_count = df_valid_nopol['NOPOL'].nunique()
         
-        # Render Kartu KPI Pengeluaran (PERBAIKAN: Mengganti teks Debit All menjadi Total Pengeluaran)
+        # Render Kartu KPI Pengeluaran
         exp_kpi1, exp_kpi2 = st.columns(2)
         with exp_kpi1:
             st.markdown(f"""
@@ -329,8 +333,6 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
             df_day_cost = df_exp_filtered.groupby('TANGGAL')['DEBIT'].sum().reset_index()
             fig_cost_line = px.line(df_day_cost, x='TANGGAL', y='DEBIT', markers=True)
             fig_cost_line.update_traces(line_color='#d84315', marker=dict(color='#ff5722'))
-            
-            # PERBAIKAN GRAFIK TREN: Judul Sumbu Y diubah dari DEBIT menjadi Total (Rp)
             fig_cost_line.update_layout(
                 plot_bgcolor='white', 
                 paper_bgcolor='white', 
@@ -345,11 +347,9 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
             st.markdown("<b style='color:#212529;'>Pengeluaran Terbesar per Store</b>", unsafe_allow_html=True)
             df_store_cost = df_exp_filtered.groupby('STORE')['DEBIT'].sum().reset_index().sort_values(by='DEBIT', ascending=True)
             
-            # Format label angka batangan full (,d)
+            # Format label batangan full (,d)
             fig_store_bar = px.bar(df_store_cost, x='DEBIT', y='STORE', orientation='h', text_auto=',d')
             fig_store_bar.update_traces(marker_color='#ff7043')
-            
-            # Format sumbu X angka full (,d)
             fig_store_bar.update_layout(
                 plot_bgcolor='white', 
                 paper_bgcolor='white', 
