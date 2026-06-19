@@ -15,7 +15,7 @@ st.set_page_config(
 # Custom Deep Orange & Gen Z CSS Style
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght=400;500;600;700&display=swap');
     
     * {
         font-family: 'Plus Jakarta Sans', sans-serif;
@@ -113,12 +113,19 @@ def load_expense_data():
     try:
         df = pd.read_csv(url)
         df.columns = [c.strip().upper() for c in df.columns]
-        df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], errors='coerce')
         
-        # Ekstrak waktu untuk filter multi-select
-        df['YEAR'] = df['TANGGAL'].dt.year.fillna(0).astype(int)
+        # PERBAIKAN UTAMA: Pakai dayfirst=True & coerce agar format tanggal terbaca sempurna
+        df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], dayfirst=True, errors='coerce')
+        
+        # Ekstrak waktu kembali dengan penanganan fillna agar tidak kosong/0 di filter
+        df['YEAR'] = df['TANGGAL'].dt.year
         df['MONTH_NAME'] = df['TANGGAL'].dt.strftime('%B')
-        df['DAY_NUM'] = df['TANGGAL'].dt.day.fillna(0).astype(int)
+        df['DAY_NUM'] = df['TANGGAL'].dt.day
+        
+        # Bersihkan data kosong akibat error parse tanggal baku
+        df = df.dropna(subset=['TANGGAL']).copy()
+        df['YEAR'] = df['YEAR'].astype(int)
+        df['DAY_NUM'] = df['DAY_NUM'].astype(int)
         
         # Bersihkan kolom DEBIT
         if 'DEBIT' in df.columns:
@@ -250,26 +257,32 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
     if df_expense.empty:
         st.error("Gagal mengambil data Pengeluaran. Pastikan link Google Sheet Pengeluaran sudah Publik.")
     else:
-        st.sidebar.markdown("<h4 style='color: #ff5722;'>Filter Pengeluaran</h4>", unsafe_allow_html=True)
+        # Header Section Pengeluaran
+        st.markdown("<h1 style='color: #ff5722; font-weight:800; margin-bottom: 5px;'>PENGELUARAN OPERASIONAL</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #6c757d; font-size: 15px; margin-bottom: 25px;'>Operasional ASG • Real-time Cost Tracking</p>", unsafe_allow_html=True)
         
-        # Filter 1: Waktu Ganda (Tahun, Bulan, Tanggal)
-        exp_year_options = sorted([int(y) for y in df_expense['YEAR'].unique() if y > 0])
-        sel_exp_years = st.sidebar.multiselect("Pilih YEAR (Tahun)", options=exp_year_options, key="exp_yr")
+        # PERBAIKAN POSISI: Filter diletakkan di bagian atas halaman utama secara horizontal agar rapi
+        st.markdown("<b style='color:#ff5722;'>⚙️ PANEL FILTER DATA PENGELUARAN</b>", unsafe_allow_html=True)
+        f_col1, f_col2, f_col3 = st.columns(3)
         
-        month_order = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
-        exp_month_options = [m for m in month_order if m in df_expense['MONTH_NAME'].unique()]
-        sel_exp_months = st.sidebar.multiselect("Pilih MONTH (Bulan)", options=exp_month_options, key="exp_mo")
-        
-        exp_date_options = sorted([int(d) for d in df_expense['DAY_NUM'].unique() if d > 0])
-        sel_exp_dates = st.sidebar.multiselect("Pilih DATE (Tanggal)", options=exp_date_options, key="exp_dt")
-        
-        # Filter 2: Store
-        exp_store_options = sorted([str(s) for s in df_expense['STORE'].unique() if str(s).strip() != ''])
-        sel_exp_stores = st.sidebar.multiselect("Pilih STORE", options=exp_store_options, key="exp_st")
-        
-        # Filter 3: Nama
-        exp_nama_options = sorted([str(n) for n in df_expense['NAMA'].unique() if str(n).strip() != ''])
-        sel_exp_namas = st.sidebar.multiselect("Pilih NAMA", options=exp_nama_options, key="exp_nm")
+        with f_col1:
+            exp_year_options = sorted([int(y) for y in df_expense['YEAR'].unique() if y > 0])
+            sel_exp_years = st.multiselect("Pilih YEAR (Tahun)", options=exp_year_options, key="exp_yr")
+            
+            exp_store_options = sorted([str(s) for s in df_expense['STORE'].unique() if str(s).strip() != ''])
+            sel_exp_stores = st.multiselect("Pilih STORE", options=exp_store_options, key="exp_st")
+            
+        with f_col2:
+            month_order = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+            exp_month_options = [m for m in month_order if m in df_expense['MONTH_NAME'].unique()]
+            sel_exp_months = st.multiselect("Pilih MONTH (Bulan)", options=exp_month_options, key="exp_mo")
+            
+            exp_nama_options = sorted([str(n) for n in df_expense['NAMA'].unique() if str(n).strip() != ''])
+            sel_exp_namas = st.multiselect("Pilih NAMA", options=exp_nama_options, key="exp_nm")
+            
+        with f_col3:
+            exp_date_options = sorted([int(d) for d in df_expense['DAY_NUM'].unique() if d > 0])
+            sel_exp_dates = st.multiselect("Pilih DATE (Tanggal)", options=exp_date_options, key="exp_dt")
         
         # Proses Filter Data Pengeluaran
         df_exp_filtered = df_expense.copy()
@@ -284,14 +297,12 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
         if sel_exp_namas:
             df_exp_filtered = df_exp_filtered[df_exp_filtered['NAMA'].isin(sel_exp_namas)]
             
-        # Header Section Pengeluaran
-        st.markdown("<h1 style='color: #ff5722; font-weight:800; margin-bottom: 5px;'>PENGELUARAN OPERASIONAL</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='color: #6c757d; font-size: 15px; margin-bottom: 25px;'>Operasional ASG • Real-time Cost Tracking</p>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
         
-        # --- PERBAIKAN: Perhitungan Ringkasan KPI ---
+        # Perhitungan Ringkasan KPI
         total_debit = df_exp_filtered['DEBIT'].sum()
         
-        # PERBAIKAN FORMULA NOPOL: Menghitung Nopol Unik/Berbeda yang Aktif (Bukan hitung total baris)
+        # Hitung Nopol Unik yang Aktif
         df_valid_nopol = df_exp_filtered[(df_exp_filtered['NOPOL'].str.upper() != 'TANPA NOPOL') & (df_exp_filtered['NOPOL'].str.strip() != '')]
         unique_nopol_count = df_valid_nopol['NOPOL'].nunique()
         
@@ -337,17 +348,13 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
         df_list_tabel = df_exp_filtered.groupby(['NAMA', 'NOPOL'])['DEBIT'].sum().reset_index().sort_values(by='DEBIT', ascending=False)
         df_list_tabel.columns = ['NAMA PERSONEL', 'NOMOR POLISI (NOPOL)', 'TOTAL PENGELUARAN (DEBIT)']
         
-        # Simpan data asli mentah (dalam bentuk angka) untuk didownload agar Excel membacanya sebagai angka baku
         csv_buffer = df_list_tabel.to_csv(index=False).encode('utf-8')
         
-        # Formatting tampilan nominal uang di layar aplikasi agar cantik pakai rupiah
         df_list_display = df_list_tabel.copy()
         df_list_display['TOTAL PENGELUARAN (DEBIT)'] = df_list_display['TOTAL PENGELUARAN (DEBIT)'].apply(lambda x: f"Rp {x:,.0f}")
         
-        # Tampilkan tabel di web dashboard
         st.dataframe(df_list_display, use_container_width=True, hide_index=True)
         
-        # --- PERBAIKAN: Tombol Download Data ---
         st.download_button(
             label="📥 Download Data List (CSV Excel)",
             data=csv_buffer,
