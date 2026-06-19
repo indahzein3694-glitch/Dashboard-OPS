@@ -342,17 +342,17 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
         st.markdown("<div class='section-title'>Analisis Grafik Biaya</div>", unsafe_allow_html=True)
         col_g1, col_g2 = st.columns(2)
         with col_g1:
-            st.markdown("<b style='color:#212529;'>Tren Pengeluaran Harian</b>", unsafe_allow_html=True)
-            df_day_cost = df_exp_filtered.groupby('TANGGAL')['DEBIT'].sum().reset_index()
-            fig_cost_line = px.line(df_day_cost, x='TANGGAL', y='DEBIT', markers=True)
-            fig_cost_line.update_traces(line_color='#d84315', marker=dict(color='#ff5722'))
+            st.markdown("<b style='color:#212529;'>Tren Pengeluaran Harian per Store</b>", unsafe_allow_html=True)
+            df_day_cost = df_exp_filtered.groupby(['TANGGAL', 'STORE'])['DEBIT'].sum().reset_index()
+            fig_cost_line = px.line(df_day_cost, x='TANGGAL', y='DEBIT', color='STORE', markers=True)
             fig_cost_line.update_layout(
                 plot_bgcolor='white', 
                 paper_bgcolor='white', 
                 margin=dict(t=20, b=20, l=20, r=20), 
                 xaxis_title=None, 
                 yaxis_title="Total (Rp)",
-                yaxis=dict(tickformat=",d")
+                yaxis=dict(tickformat=",d"),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=None)
             )
             st.plotly_chart(fig_cost_line, use_container_width=True)
             
@@ -375,8 +375,9 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
         # DATA LIST TABULAR
         st.markdown("<div class='section-title'>Data List Pengeluaran</div>", unsafe_allow_html=True)
         
-        df_list_tabel = df_exp_filtered.groupby(['NAMA', 'NOPOL'])['DEBIT'].sum().reset_index().sort_values(by='DEBIT', ascending=False)
-        df_list_tabel.columns = ['NAMA PERSONEL', 'NOMOR POLISI (NOPOL)', 'TOTAL PENGELUARAN']
+        # PERBAIKAN UTAMA: Kolom STORE resmi ditambahkan kembali di posisi pertama pada Data List bawah
+        df_list_tabel = df_exp_filtered.groupby(['STORE', 'NAMA', 'NOPOL'])['DEBIT'].sum().reset_index().sort_values(by='DEBIT', ascending=False)
+        df_list_tabel.columns = ['STORE', 'NAMA PERSONEL', 'NOMOR POLISI (NOPOL)', 'TOTAL PENGELUARAN']
         
         csv_buffer = df_list_tabel.to_csv(index=False).encode('utf-8')
         
