@@ -93,9 +93,12 @@ def load_sales_data():
         df['MONTH_NUM'] = df['TANGGAL'].dt.month
         df['DAY_NUM'] = df['TANGGAL'].dt.day.astype(int)
         
+        # PERBAIKAN TOTAL ALL ONE WAY: 
+        # Menggunakan regex '[^\d]' untuk menghapus paksa semua karakter non-angka (seperti titik, koma, spasi, atau teks) 
+        # agar murni tersisa angka bulat KM yang bisa dijumlahkan dengan akurat.
         all_one_way_col = [c for c in df.columns if 'ONE WAY' in c]
         if all_one_way_col:
-            df['ALL ONE WAY'] = df[all_one_way_col[0]].astype(str).str.replace(',', '', regex=False)
+            df['ALL ONE WAY'] = df[all_one_way_col[0]].astype(str).str.replace(r'[^\d]', '', regex=True).str.strip()
             df['ALL ONE WAY'] = pd.to_numeric(df['ALL ONE WAY'], errors='coerce').fillna(0)
         else:
             df['ALL ONE WAY'] = 0
@@ -223,6 +226,7 @@ if menu_pilihan == "📊 Performa Operasional ASG":
         with kpi2:
             st.markdown(f'<div class="kpi-card"><div class="kpi-title">Ritase Index (Avg/Day)</div><div class="kpi-value">{ritase_index:.2f} <span style="font-size:14px; font-weight:400; color:#6c757d;">rit/truk</span></div></div>', unsafe_allow_html=True)
         with kpi3:
+            # DIKEMBALIKAN KE FORMAT KM: Menampilkan kembali teks satuan KM di akhir angka total
             st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total All One Way</div><div class="kpi-value">{total_all_one_way:,.0f} <span style="font-size:14px; font-weight:400; color:#6c757d;">KM</span></div></div>', unsafe_allow_html=True)
             
         st.markdown("<div class='section-title'>Visualisasi Performa</div>", unsafe_allow_html=True)
@@ -375,7 +379,6 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
         # DATA LIST TABULAR
         st.markdown("<div class='section-title'>Data List Pengeluaran</div>", unsafe_allow_html=True)
         
-        # PERBAIKAN UTAMA: Kolom STORE resmi ditambahkan kembali di posisi pertama pada Data List bawah
         df_list_tabel = df_exp_filtered.groupby(['STORE', 'NAMA', 'NOPOL'])['DEBIT'].sum().reset_index().sort_values(by='DEBIT', ascending=False)
         df_list_tabel.columns = ['STORE', 'NAMA PERSONEL', 'NOMOR POLISI (NOPOL)', 'TOTAL PENGELUARAN']
         
