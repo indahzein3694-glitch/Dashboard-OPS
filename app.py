@@ -93,17 +93,13 @@ def load_sales_data():
         df['MONTH_NUM'] = df['TANGGAL'].dt.month
         df['DAY_NUM'] = df['TANGGAL'].dt.day.astype(int)
         
-        # PERBAIKAN TOTAL ALL ONE WAY: 
-        # Menggunakan regex '[^\d]' untuk menghapus paksa semua karakter non-angka (seperti titik, koma, spasi, atau teks) 
-        # agar murni tersisa angka bulat KM yang bisa dijumlahkan dengan akurat.
         all_one_way_col = [c for c in df.columns if 'ONE WAY' in c]
         if all_one_way_col:
-            df['ALL ONE WAY'] = df[all_one_way_col[0]].astype(str).str.replace(r'[^\d]', '', regex=True).str.strip()
+            df['ALL ONE WAY'] = df[all_one_way_col[0]].astype(str).str.replace(',', '', regex=False)
             df['ALL ONE WAY'] = pd.to_numeric(df['ALL ONE WAY'], errors='coerce').fillna(0)
         else:
             df['ALL ONE WAY'] = 0
             
-        # PENANGANAN NO INVOICE SEBAGAI NAMA STORE
         if 'NO INVOICE' in df.columns:
             df['STORE'] = df['NO INVOICE'].fillna('TANPA NAMA').astype(str).str.strip().str.upper()
         elif 'STORE' in df.columns:
@@ -111,7 +107,6 @@ def load_sales_data():
         else:
             df['STORE'] = 'TANPA NAMA'
             
-        # Saring baris hantu/kosong
         df = df[df['STORE'].str.strip() != ''].copy()
         df = df[df['STORE'] != 'TANPA NAMA'].copy()
         df = df[df['STORE'] != 'NAN'].copy()
@@ -146,7 +141,6 @@ def load_expense_data():
             
         df['STORE'] = df['STORE'].fillna('TANPA NAMA').astype(str).str.strip().str.upper()
         
-        # Saring baris hantu/kosong
         df = df[df['STORE'].str.strip() != ''].copy()
         df = df[df['STORE'] != 'TANPA NAMA'].copy()
         df = df[df['STORE'] != 'NAN'].copy()
@@ -194,7 +188,6 @@ if menu_pilihan == "📊 Performa Operasional ASG":
         store_options = sorted([str(s) for s in df_cleaned['STORE'].unique() if str(s).strip() != ''])
         selected_stores = st.sidebar.multiselect("Pilih Store", options=store_options, default=[])
         
-        # Filter Process
         df_filtered = df_cleaned.copy()
         if selected_years:
             df_filtered = df_filtered[df_filtered['YEAR'].isin(selected_years)]
@@ -205,11 +198,9 @@ if menu_pilihan == "📊 Performa Operasional ASG":
         if selected_stores:
             df_filtered = df_filtered[df_filtered['STORE'].isin(selected_stores)]
             
-        # Header Section
         st.markdown("<h1 style='color: #ff5722; font-weight:800; margin-bottom: 5px;'>SALES & RITASE DASHBOARD</h1>", unsafe_allow_html=True)
         st.markdown("<p style='color: #6c757d; font-size: 15px; margin-bottom: 25px;'>Operasional ASG • Real-time Monitoring & Analysis</p>", unsafe_allow_html=True)
         
-        # KPI Calculation
         total_sales = df_filtered['SALES'].sum()
         total_all_one_way = df_filtered['ALL ONE WAY'].sum()
         total_days = df_filtered['TANGGAL'].nunique()
@@ -226,7 +217,6 @@ if menu_pilihan == "📊 Performa Operasional ASG":
         with kpi2:
             st.markdown(f'<div class="kpi-card"><div class="kpi-title">Ritase Index (Avg/Day)</div><div class="kpi-value">{ritase_index:.2f} <span style="font-size:14px; font-weight:400; color:#6c757d;">rit/truk</span></div></div>', unsafe_allow_html=True)
         with kpi3:
-            # DIKEMBALIKAN KE FORMAT KM: Menampilkan kembali teks satuan KM di akhir angka total
             st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total All One Way</div><div class="kpi-value">{total_all_one_way:,.0f} <span style="font-size:14px; font-weight:400; color:#6c757d;">KM</span></div></div>', unsafe_allow_html=True)
             
         st.markdown("<div class='section-title'>Visualisasi Performa</div>", unsafe_allow_html=True)
@@ -276,11 +266,9 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
     if df_expense.empty:
         st.error("Gagal mengambil data Pengeluaran. Pastikan link Google Sheet Pengeluaran sudah Publik.")
     else:
-        # Header Section Pengeluaran
         st.markdown("<h1 style='color: #ff5722; font-weight:800; margin-bottom: 5px;'>PENGELUARAN OPERASIONAL</h1>", unsafe_allow_html=True)
         st.markdown("<p style='color: #6c757d; font-size: 15px; margin-bottom: 25px;'>Operasional ASG • Real-time Cost Tracking</p>", unsafe_allow_html=True)
         
-        # Panel Filter
         st.markdown("<b style='color:#ff5722;'>⚙️ PANEL FILTER DATA PENGELUARAN</b>", unsafe_allow_html=True)
         f_col1, f_col2, f_col3 = st.columns(3)
         
@@ -303,7 +291,6 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
             exp_date_options = sorted([int(d) for d in df_expense['DAY_NUM'].unique() if d > 0])
             sel_exp_dates = st.multiselect("Pilih DATE (Tanggal)", options=exp_date_options, key="exp_dt")
         
-        # Proses Filter Data Pengeluaran
         df_exp_filtered = df_expense.copy()
         if sel_exp_years:
             df_exp_filtered = df_exp_filtered[df_exp_filtered['YEAR'].isin(sel_exp_years)]
@@ -318,14 +305,11 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
             
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # Perhitungan Ringkasan KPI
         total_debit = df_exp_filtered['DEBIT'].sum()
         
-        # Hitung Nopol Unik yang Aktif
         df_valid_nopol = df_exp_filtered[(df_exp_filtered['NOPOL'].str.upper() != 'TANPA NOPOL') & (df_exp_filtered['NOPOL'].str.strip() != '')]
         unique_nopol_count = df_valid_nopol['NOPOL'].nunique()
         
-        # Render Kartu KPI Pengeluaran
         exp_kpi1, exp_kpi2 = st.columns(2)
         with exp_kpi1:
             st.markdown(f"""
@@ -342,7 +326,6 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                 </div>
             """, unsafe_allow_html=True)
             
-        # Visualisasi Ringkasan Grafik Pengeluaran
         st.markdown("<div class='section-title'>Analisis Grafik Biaya</div>", unsafe_allow_html=True)
         col_g1, col_g2 = st.columns(2)
         with col_g1:
@@ -379,6 +362,7 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
         # DATA LIST TABULAR
         st.markdown("<div class='section-title'>Data List Pengeluaran</div>", unsafe_allow_html=True)
         
+        # LOGIKA ASLI DIKEMBALIKAN: Pengelompokan murni berdasarkan baris data awal tanpa merusak kalkulasi sum()
         df_list_tabel = df_exp_filtered.groupby(['STORE', 'NAMA', 'NOPOL'])['DEBIT'].sum().reset_index().sort_values(by='DEBIT', ascending=False)
         df_list_tabel.columns = ['STORE', 'NAMA PERSONEL', 'NOMOR POLISI (NOPOL)', 'TOTAL PENGELUARAN']
         
