@@ -151,6 +151,18 @@ def load_expense_data():
     except Exception as e:
         return pd.DataFrame()
 
+# --- Fungsi Load Data 3: PEMANTAUAN BBM & KM (BARU) ---
+@st.cache_data(ttl=600)
+def load_bbm_data():
+    url = "https://docs.google.com/spreadsheets/d/1TKznhfQwdPSdMu4dPxoMXis-3jR9QRCAqLAUzBAftpk/export?format=csv"
+    try:
+        df = pd.read_csv(url)
+        # Menghapus spasi tersembunyi pada nama kolom agar tidak error
+        df.columns = df.columns.str.strip()
+        return df
+    except Exception as e:
+        return None
+
 
 # 3. SIDEBAR NAVIGATION MENU
 st.sidebar.image("https://img.icons8.com/fluent/96/000000/dashboard.png", width=80)
@@ -261,124 +273,220 @@ if menu_pilihan == "📊 Performa Operasional ASG":
 # HALAMAN 2: DASHBOARD PENGELUARAN OPERASIONAL
 # ==========================================
 elif menu_pilihan == "💸 Pengeluaran Operasional":
-    df_expense = load_expense_data()
     
-    if df_expense.empty:
-        st.error("Gagal mengambil data Pengeluaran. Pastikan link Google Sheet Pengeluaran sudah Publik.")
-    else:
-        st.markdown("<h1 style='color: #ff5722; font-weight:800; margin-bottom: 5px;'>PENGELUARAN OPERASIONAL</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='color: #6c757d; font-size: 15px; margin-bottom: 25px;'>Operasional ASG • Real-time Cost Tracking</p>", unsafe_allow_html=True)
+    # --- MEMBUAT 2 TAB UNTUK MEMISAHKAN DATA ---
+    tab_umum, tab_bbm = st.tabs(["💸 Analisis Biaya Umum", "⛽ Pemantauan BBM & KM Armada"])
+    
+    # ----------------------------------------
+    # TAB 1: ANALISIS BIAYA UMUM (KODE LAMA)
+    # ----------------------------------------
+    with tab_umum:
+        df_expense = load_expense_data()
         
-        st.markdown("<b style='color:#ff5722;'>⚙️ PANEL FILTER DATA PENGELUARAN</b>", unsafe_allow_html=True)
-        f_col1, f_col2, f_col3 = st.columns(3)
-        
-        with f_col1:
-            exp_year_options = sorted([int(y) for y in df_expense['YEAR'].unique() if y > 0])
-            sel_exp_years = st.multiselect("Pilih YEAR (Tahun)", options=exp_year_options, key="exp_yr")
+        if df_expense.empty:
+            st.error("Gagal mengambil data Pengeluaran. Pastikan link Google Sheet Pengeluaran sudah Publik.")
+        else:
+            st.markdown("<h1 style='color: #ff5722; font-weight:800; margin-bottom: 5px;'>PENGELUARAN OPERASIONAL</h1>", unsafe_allow_html=True)
+            st.markdown("<p style='color: #6c757d; font-size: 15px; margin-bottom: 25px;'>Operasional ASG • Real-time Cost Tracking</p>", unsafe_allow_html=True)
             
-            exp_store_options = sorted([str(s) for s in df_expense['STORE'].unique() if str(s).strip() != ''])
-            sel_exp_stores = st.multiselect("Pilih STORE", options=exp_store_options, key="exp_st")
+            st.markdown("<b style='color:#ff5722;'>⚙️ PANEL FILTER DATA PENGELUARAN</b>", unsafe_allow_html=True)
+            f_col1, f_col2, f_col3 = st.columns(3)
             
-        with f_col2:
-            month_order = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
-            exp_month_options = [m for m in month_order if m in df_expense['MONTH_NAME'].unique()]
-            sel_exp_months = st.multiselect("Pilih MONTH (Bulan)", options=exp_month_options, key="exp_mo")
+            with f_col1:
+                exp_year_options = sorted([int(y) for y in df_expense['YEAR'].unique() if y > 0])
+                sel_exp_years = st.multiselect("Pilih YEAR (Tahun)", options=exp_year_options, key="exp_yr")
+                
+                exp_store_options = sorted([str(s) for s in df_expense['STORE'].unique() if str(s).strip() != ''])
+                sel_exp_stores = st.multiselect("Pilih STORE", options=exp_store_options, key="exp_st")
+                
+            with f_col2:
+                month_order = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+                exp_month_options = [m for m in month_order if m in df_expense['MONTH_NAME'].unique()]
+                sel_exp_months = st.multiselect("Pilih MONTH (Bulan)", options=exp_month_options, key="exp_mo")
+                
+                exp_nama_options = sorted([str(n) for n in df_expense['NAMA'].unique() if str(n).strip() != ''])
+                sel_exp_namas = st.multiselect("Pilih NAMA", options=exp_nama_options, key="exp_nm")
+                
+            with f_col3:
+                exp_date_options = sorted([int(d) for d in df_expense['DAY_NUM'].unique() if d > 0])
+                sel_exp_dates = st.multiselect("Pilih DATE (Tanggal)", options=exp_date_options, key="exp_dt")
             
-            exp_nama_options = sorted([str(n) for n in df_expense['NAMA'].unique() if str(n).strip() != ''])
-            sel_exp_namas = st.multiselect("Pilih NAMA", options=exp_nama_options, key="exp_nm")
+            df_exp_filtered = df_expense.copy()
+            if sel_exp_years:
+                df_exp_filtered = df_exp_filtered[df_exp_filtered['YEAR'].isin(sel_exp_years)]
+            if sel_exp_months:
+                df_exp_filtered = df_exp_filtered[df_exp_filtered['MONTH_NAME'].isin(sel_exp_months)]
+            if sel_exp_dates:
+                df_exp_filtered = df_exp_filtered[df_exp_filtered['DAY_NUM'].isin(sel_exp_dates)]
+            if sel_exp_stores:
+                df_exp_filtered = df_exp_filtered[df_exp_filtered['STORE'].isin(sel_exp_stores)]
+            if sel_exp_namas:
+                df_exp_filtered = df_exp_filtered[df_exp_filtered['NAMA'].isin(sel_exp_namas)]
+                
+            st.markdown("<br>", unsafe_allow_html=True)
             
-        with f_col3:
-            exp_date_options = sorted([int(d) for d in df_expense['DAY_NUM'].unique() if d > 0])
-            sel_exp_dates = st.multiselect("Pilih DATE (Tanggal)", options=exp_date_options, key="exp_dt")
-        
-        df_exp_filtered = df_expense.copy()
-        if sel_exp_years:
-            df_exp_filtered = df_exp_filtered[df_exp_filtered['YEAR'].isin(sel_exp_years)]
-        if sel_exp_months:
-            df_exp_filtered = df_exp_filtered[df_exp_filtered['MONTH_NAME'].isin(sel_exp_months)]
-        if sel_exp_dates:
-            df_exp_filtered = df_exp_filtered[df_exp_filtered['DAY_NUM'].isin(sel_exp_dates)]
-        if sel_exp_stores:
-            df_exp_filtered = df_exp_filtered[df_exp_filtered['STORE'].isin(sel_exp_stores)]
-        if sel_exp_namas:
-            df_exp_filtered = df_exp_filtered[df_exp_filtered['NAMA'].isin(sel_exp_namas)]
+            total_debit = df_exp_filtered['DEBIT'].sum()
             
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        total_debit = df_exp_filtered['DEBIT'].sum()
-        
-        df_valid_nopol = df_exp_filtered[(df_exp_filtered['NOPOL'].str.upper() != 'TANPA NOPOL') & (df_exp_filtered['NOPOL'].str.strip() != '')]
-        unique_nopol_count = df_valid_nopol['NOPOL'].nunique()
-        
-        exp_kpi1, exp_kpi2 = st.columns(2)
-        with exp_kpi1:
-            st.markdown(f"""
-                <div class="kpi-card">
-                    <div class="kpi-title">Total Pengeluaran</div>
-                    <div class="kpi-value">Rp {total_debit:,.0f}</div>
-                </div>
-            """, unsafe_allow_html=True)
-        with exp_kpi2:
-            st.markdown(f"""
-                <div class="kpi-card">
-                    <div class="kpi-title">Total Nopol Aktif</div>
-                    <div class="kpi-value">{unique_nopol_count:,.0f} <span style='font-size:14px; font-weight:400; color:#6c757d;'>Unit Armada</span></div>
-                </div>
-            """, unsafe_allow_html=True)
+            df_valid_nopol = df_exp_filtered[(df_exp_filtered['NOPOL'].str.upper() != 'TANPA NOPOL') & (df_exp_filtered['NOPOL'].str.strip() != '')]
+            unique_nopol_count = df_valid_nopol['NOPOL'].nunique()
             
-        st.markdown("<div class='section-title'>Analisis Grafik Biaya</div>", unsafe_allow_html=True)
-        col_g1, col_g2 = st.columns(2)
-        with col_g1:
-            st.markdown("<b style='color:#212529;'>Tren Pengeluaran Harian per Store</b>", unsafe_allow_html=True)
-            df_day_cost = df_exp_filtered.groupby(['TANGGAL', 'STORE'])['DEBIT'].sum().reset_index()
-            fig_cost_line = px.line(df_day_cost, x='TANGGAL', y='DEBIT', color='STORE', markers=True)
-            fig_cost_line.update_layout(
-                plot_bgcolor='white', 
-                paper_bgcolor='white', 
-                margin=dict(t=20, b=20, l=20, r=20), 
-                xaxis_title=None, 
-                yaxis_title="Total (Rp)",
-                yaxis=dict(tickformat=",d"),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=None)
+            exp_kpi1, exp_kpi2 = st.columns(2)
+            with exp_kpi1:
+                st.markdown(f"""
+                    <div class="kpi-card">
+                        <div class="kpi-title">Total Pengeluaran</div>
+                        <div class="kpi-value">Rp {total_debit:,.0f}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+            with exp_kpi2:
+                st.markdown(f"""
+                    <div class="kpi-card">
+                        <div class="kpi-title">Total Nopol Aktif</div>
+                        <div class="kpi-value">{unique_nopol_count:,.0f} <span style='font-size:14px; font-weight:400; color:#6c757d;'>Unit Armada</span></div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+            st.markdown("<div class='section-title'>Analisis Grafik Biaya</div>", unsafe_allow_html=True)
+            col_g1, col_g2 = st.columns(2)
+            with col_g1:
+                st.markdown("<b style='color:#212529;'>Tren Pengeluaran Harian per Store</b>", unsafe_allow_html=True)
+                df_day_cost = df_exp_filtered.groupby(['TANGGAL', 'STORE'])['DEBIT'].sum().reset_index()
+                fig_cost_line = px.line(df_day_cost, x='TANGGAL', y='DEBIT', color='STORE', markers=True)
+                fig_cost_line.update_layout(
+                    plot_bgcolor='white', 
+                    paper_bgcolor='white', 
+                    margin=dict(t=20, b=20, l=20, r=20), 
+                    xaxis_title=None, 
+                    yaxis_title="Total (Rp)",
+                    yaxis=dict(tickformat=",d"),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, title=None)
+                )
+                st.plotly_chart(fig_cost_line, use_container_width=True)
+                
+            with col_g2:
+                st.markdown("<b style='color:#212529;'>Pengeluaran Terbesar per Store</b>", unsafe_allow_html=True)
+                df_store_cost = df_exp_filtered.groupby('STORE')['DEBIT'].sum().reset_index().sort_values(by='DEBIT', ascending=True)
+                
+                fig_store_bar = px.bar(df_store_cost, x='DEBIT', y='STORE', orientation='h', text_auto=',d')
+                fig_store_bar.update_traces(marker_color='#ff7043')
+                fig_store_bar.update_layout(
+                    plot_bgcolor='white', 
+                    paper_bgcolor='white', 
+                    margin=dict(t=20, b=20, l=20, r=20), 
+                    xaxis_title="Total (Rp)", 
+                    yaxis_title=None,
+                    xaxis=dict(tickformat=",d")
+                )
+                st.plotly_chart(fig_store_bar, use_container_width=True)
+                
+            # DATA LIST TABULAR
+            st.markdown("<div class='section-title'>Data List Pengeluaran</div>", unsafe_allow_html=True)
+            
+            df_list_tabel = df_exp_filtered.groupby(['STORE', 'NAMA', 'NOPOL'])['DEBIT'].sum().reset_index().sort_values(by='DEBIT', ascending=False)
+            df_list_tabel.columns = ['STORE', 'NAMA PERSONEL', 'NOMOR POLISI (NOPOL)', 'TOTAL PENGELUARAN']
+            
+            csv_buffer = df_list_tabel.to_csv(index=False).encode('utf-8')
+            
+            df_list_display = df_list_tabel.copy()
+            df_list_display['TOTAL PENGELUARAN'] = df_list_display['TOTAL PENGELUARAN'].apply(lambda x: f"Rp {x:,.0f}")
+            
+            st.dataframe(df_list_display, use_container_width=True, hide_index=True)
+            
+            st.download_button(
+                label="📥 Download Data List (CSV Excel)",
+                data=csv_buffer,
+                file_name=f"data_pengeluaran_asg_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
             )
-            st.plotly_chart(fig_cost_line, use_container_width=True)
+
+    # ----------------------------------------
+    # TAB 2: PEMANTAUAN BBM & KM ARMADA (FITUR BARU)
+    # ----------------------------------------
+    with tab_bbm:
+        st.markdown("<h1 style='color: #ff5722; font-weight:800; margin-bottom: 5px;'>PEMANTAUAN KONSUMSI BBM & KM</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #6c757d; font-size: 15px; margin-bottom: 25px;'>Sistem Deteksi Efisiensi Bahan Bakar per Nopol Armada</p>", unsafe_allow_html=True)
+        
+        df_bbm = load_bbm_data()
+        
+        if df_bbm is not None:
+            # PENTING: Jika nama header di excel berbeda, ubah teks di dalam tanda kutip ini
+            kolom_nopol = 'Nopol' 
+            kolom_bbm   = 'BBM'
+            kolom_batas = 'Batas BBM'
+            kolom_km    = 'KM'
             
-        with col_g2:
-            st.markdown("<b style='color:#212529;'>Pengeluaran Terbesar per Store</b>", unsafe_allow_html=True)
-            df_store_cost = df_exp_filtered.groupby('STORE')['DEBIT'].sum().reset_index().sort_values(by='DEBIT', ascending=True)
-            
-            fig_store_bar = px.bar(df_store_cost, x='DEBIT', y='STORE', orientation='h', text_auto=',d')
-            fig_store_bar.update_traces(marker_color='#ff7043')
-            fig_store_bar.update_layout(
-                plot_bgcolor='white', 
-                paper_bgcolor='white', 
-                margin=dict(t=20, b=20, l=20, r=20), 
-                xaxis_title="Total (Rp)", 
-                yaxis_title=None,
-                xaxis=dict(tickformat=",d")
-            )
-            st.plotly_chart(fig_store_bar, use_container_width=True)
-            
-        # DATA LIST TABULAR
-        st.markdown("<div class='section-title'>Data List Pengeluaran</div>", unsafe_allow_html=True)
-        
-        # LOGIKA ASLI DIKEMBALIKAN: Pengelompokan murni berdasarkan baris data awal tanpa merusak kalkulasi sum()
-        df_list_tabel = df_exp_filtered.groupby(['STORE', 'NAMA', 'NOPOL'])['DEBIT'].sum().reset_index().sort_values(by='DEBIT', ascending=False)
-        df_list_tabel.columns = ['STORE', 'NAMA PERSONEL', 'NOMOR POLISI (NOPOL)', 'TOTAL PENGELUARAN']
-        
-        csv_buffer = df_list_tabel.to_csv(index=False).encode('utf-8')
-        
-        df_list_display = df_list_tabel.copy()
-        df_list_display['TOTAL PENGELUARAN'] = df_list_display['TOTAL PENGELUARAN'].apply(lambda x: f"Rp {x:,.0f}")
-        
-        st.dataframe(df_list_display, use_container_width=True, hide_index=True)
-        
-        st.download_button(
-            label="📥 Download Data List (CSV Excel)",
-            data=csv_buffer,
-            file_name=f"data_pengeluaran_asg_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv",
-        )
+            if kolom_nopol in df_bbm.columns and kolom_bbm in df_bbm.columns:
+                
+                # Mengelompokkan data berdasarkan Nopol
+                df_summary = df_bbm.groupby(kolom_nopol).agg({
+                    kolom_bbm: 'sum',
+                    kolom_batas: 'mean', 
+                    kolom_km: 'sum'
+                }).reset_index()
+                
+                # 1. Logika Penentuan Status
+                def tentukan_status(row):
+                    if row[kolom_bbm] > row[kolom_batas]:
+                        return "Melebihi Batas"
+                    else:
+                        return "Masih Batas Aman"
+                        
+                df_summary['Status'] = df_summary.apply(tentukan_status, axis=1)
+                
+                # 2. Logika Pewarnaan Background Status
+                def warna_status(val):
+                    if val == 'Melebihi Batas':
+                        return 'background-color: #ff4b4b; color: white; font-weight: bold;'
+                    elif val == 'Masih Batas Aman':
+                        return 'background-color: #21c354; color: white; font-weight: bold;'
+                    return ''
+                
+                # --- METRIK RINGKASAN ---
+                total_armada_bbm = df_summary[kolom_nopol].nunique()
+                over_budget = len(df_summary[df_summary['Status'] == 'Melebihi Batas'])
+                safe_budget = total_armada_bbm - over_budget
+                
+                bbm_kpi1, bbm_kpi2, bbm_kpi3 = st.columns(3)
+                with bbm_kpi1:
+                    st.markdown(f"""
+                        <div class="kpi-card" style="border-top: 4px solid #6c757d;">
+                            <div class="kpi-title">Total Nopol Terdata</div>
+                            <div class="kpi-value">{total_armada_bbm}</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+                with bbm_kpi2:
+                    st.markdown(f"""
+                        <div class="kpi-card" style="border-top: 4px solid #ff4b4b;">
+                            <div class="kpi-title">Melebihi Batas BBM 🔴</div>
+                            <div class="kpi-value">{over_budget}</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+                with bbm_kpi3:
+                    st.markdown(f"""
+                        <div class="kpi-card" style="border-top: 4px solid #21c354;">
+                            <div class="kpi-title">Batas BBM Aman 🟢</div>
+                            <div class="kpi-value">{safe_budget}</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+                
+                st.markdown("<div class='section-title'>Rincian Pengeluaran per Nomor Polisi</div>", unsafe_allow_html=True)
+                
+                # --- FORMAT ANGKA UNTUK TABEL ---
+                format_dict = {
+                    kolom_bbm: 'Rp {:,.0f}', 
+                    kolom_batas: 'Rp {:,.0f}', 
+                    kolom_km: '{:,.0f} KM'
+                }
+                
+                # Terapkan gaya dan tampilkan
+                styled_df = df_summary.style.map(warna_status, subset=['Status']).format(format_dict)
+                st.dataframe(styled_df, use_container_width=True, hide_index=True)
+                
+            else:
+                st.warning(f"Pastikan kolom di Google Sheet persis bernama: 'Nopol', 'BBM', 'Batas BBM', dan 'KM'. Kolom saat ini: {', '.join(df_bbm.columns)}")
+                
+        else:
+            st.error("Gagal menarik data BBM dari Google Sheets. Pastikan akses di-set ke 'Anyone with the link can view'.")
 
 # Footer Aplikasi
 st.markdown("<hr style='border: 0.5px solid rgba(235, 94, 40, 0.1);'>", unsafe_allow_html=True)
