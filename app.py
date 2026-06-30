@@ -1,82 +1,105 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from datetime import datetime
 
-# --- CONFIGURATION ---
-st.set_page_config(page_title="ASG Operations Dashboard", page_icon="📊", layout="wide")
+# 1. Page Configuration & Theme
+st.set_page_config(
+    page_title="ASG Operations & Expense Dashboard",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# CSS Styling
+# Custom Deep Orange & Gen Z CSS Style
 st.markdown("""
     <style>
-    .kpi-card { background: white; padding: 20px; border-radius: 12px; border-left: 5px solid #ff5722; box-shadow: 2px 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
-    .kpi-title { color: #6c757d; font-size: 12px; text-transform: uppercase; font-weight: bold; }
-    .kpi-value { color: #ff5722; font-size: 24px; font-weight: bold; }
-    .section-title { font-size: 18px; font-weight: bold; margin-top: 20px; margin-bottom: 10px; }
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+    * { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .stApp { background-color: #fcfbfa; }
+    .kpi-card { background: white; padding: 24px; border-radius: 16px; box-shadow: 0 4px 20px rgba(235, 94, 40, 0.05); border: 1px solid rgba(235, 94, 40, 0.08); transition: transform 0.2s ease; margin-bottom: 20px; }
+    .kpi-title { color: #6c757d; font-size: 14px; font-weight: 600; text-transform: uppercase; margin-bottom: 8px; }
+    .kpi-value { color: #ff5722; font-size: 28px; font-weight: 700; }
+    .section-title { color: #212529; font-size: 20px; font-weight: 700; margin-top: 10px; margin-bottom: 20px; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- DATA LOADERS ---
+# 2. DATA LOADING FUNCTIONS
 @st.cache_data(ttl=600)
-def load_all_data():
-    try:
-        # Sheet 1: Sales/Ritase
-        df_sales = pd.read_csv("https://docs.google.com/spreadsheets/d/1Z3sGqENFtjF-gGsRuN4lLUhmGZa5X1AbVx8Ueu-63YQ/gviz/tq?tqx=out:csv&sheet=LAPORAN")
-        # Sheet 2: Pengeluaran
-        df_exp = pd.read_csv("https://docs.google.com/spreadsheets/d/1ODK1VYWR6xtFGmpo6CYaLdtzucw2d4uKFDibj8DU3OE/gviz/tq?tqx=out:csv&sheet=PENGELUARAN")
-        # Sheet 3: Master BBM
-        df_bbm = pd.read_csv("https://docs.google.com/spreadsheets/d/1TKznhfQwdPSdMu4dPxoMXis-3jR9QRCAqLAUzBAftpk/gviz/tq?tqx=out:csv&sheet=Sheet1")
-        
-        for df in [df_sales, df_exp, df_bbm]:
-            df.columns = df.columns.str.strip().str.upper()
-        return df_sales, df_exp, df_bbm
-    except:
-        return None, None, None
+def load_sales_data():
+    url = "https://docs.google.com/spreadsheets/d/1Z3sGqENFtjF-gGsRuN4lLUhmGZa5X1AbVx8Ueu-63YQ/gviz/tq?tqx=out:csv&sheet=LAPORAN"
+    df = pd.read_csv(url)
+    df.columns = [c.strip().upper() for c in df.columns]
+    df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], dayfirst=True, errors='coerce')
+    df['YEAR'] = df['TANGGAL'].dt.year.astype(int)
+    df['MONTH_NAME'] = df['TANGGAL'].dt.strftime('%B')
+    df['MONTH_NUM'] = df['TANGGAL'].dt.month
+    df['DAY_NUM'] = df['TANGGAL'].dt.day.astype(int)
+    return df
 
-# --- APP START ---
-df_sales, df_exp, df_bbm = load_all_data()
+@st.cache_data(ttl=600)
+def load_expense_data():
+    url = "https://docs.google.com/spreadsheets/d/1ODK1VYWR6xtFGmpo6CYaLdtzucw2d4uKFDibj8DU3OE/gviz/tq?tqx=out:csv&sheet=PENGELUARAN"
+    df = pd.read_csv(url)
+    df.columns = [c.strip().upper() for c in df.columns]
+    df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], dayfirst=True, errors='coerce')
+    df['YEAR'] = df['TANGGAL'].dt.year.astype(int)
+    df['MONTH_NAME'] = df['TANGGAL'].dt.strftime('%B')
+    df['DAY_NUM'] = df['TANGGAL'].dt.day.astype(int)
+    df['DEBIT'] = pd.to_numeric(df['DEBIT'].astype(str).str.replace(r'[Rp,]', '', regex=True), errors='coerce').fillna(0)
+    return df
 
-menu = st.sidebar.radio("MENU UTAMA", ["📊 Performa Sales", "💸 Pengeluaran & BBM"])
+@st.cache_data(ttl=600)
+def load_bbm_master():
+    # Mengambil data dari spreadsheet baru
+    url = "https://docs.google.com/spreadsheets/d/1TKznhfQwdPSdMu4dPxoMXis-3jR9QRCAqLAUzBAftpk/export?format=csv"
+    df = pd.read_csv(url)
+    df.columns = df.columns.str.strip()
+    return df
 
-# --- HALAMAN 1: SALES ---
-if menu == "📊 Performa Sales":
-    st.title("📊 Performa Operasional ASG")
-    if df_sales is not None:
-        st.write("Gunakan filter di sidebar untuk melihat data.")
-        st.dataframe(df_sales, use_container_width=True)
-    else:
-        st.error("Data tidak ditemukan.")
+# 3. SIDEBAR
+menu_pilihan = st.sidebar.radio("Pilih Halaman Dashboard:", ["📊 Performa Operasional ASG", "💸 Pengeluaran Operasional"])
 
-# --- HALAMAN 2: PENGELUARAN & BBM ---
-elif menu == "💸 Pengeluaran & BBM":
-    st.title("💸 Pengeluaran & Pemantauan BBM")
-    tab1, tab2 = st.tabs(["💰 Analisis Pengeluaran", "⛽ Monitoring BBM per Nopol"])
+# --- HALAMAN 1 (SALES) ---
+if menu_pilihan == "📊 Performa Operasional ASG":
+    df_cleaned = load_sales_data()
+    st.title("SALES & RITASE DASHBOARD")
+    st.dataframe(df_cleaned, use_container_width=True)
+
+# --- HALAMAN 2 (PENGELUARAN + BBM) ---
+elif menu_pilihan == "💸 Pengeluaran Operasional":
+    # Membuat Tabs
+    tab_utama, tab_bbm = st.tabs(["💰 Analisis Biaya Umum", "⛽ Monitoring BBM & KM"])
     
-    with tab1:
-        if df_exp is not None:
-            st.dataframe(df_exp, use_container_width=True)
-            
-    with tab2:
-        if df_bbm is not None and df_sales is not None and df_exp is not None:
-            # Kalkulasi Gabungan
-            df_km = df_sales.groupby('NOPOL')['ALL ONE WAY'].sum().reset_index()
-            df_biaya = df_exp.groupby('NOPOL')['DEBIT'].sum().reset_index()
-            
-            # Merge Master
-            merged = pd.merge(df_bbm, df_km, on='NOPOL', how='left').fillna(0)
-            merged = pd.merge(merged, df_biaya, on='NOPOL', how='left').fillna(0)
-            
-            # Logika Status BBM (Rasio Standar Km/Liter)
-            # Batas: (KM / Rasio) * Harga per Liter (Asumsi 6.800)
-            merged['BATAS_MAKS'] = (merged['ALL ONE WAY'] / merged['RASIO STANDAR KM/LITER']) * 6800
-            merged['STATUS'] = merged.apply(
-                lambda x: "Melebihi Batas" if x['DEBIT'] > x['BATAS_MAKS'] else "Masih Batas Aman", axis=1
-            )
-            
-            # Tabel dengan warna
-            def color_status(val):
-                return 'background-color: #ff4b4b; color: white;' if val == 'Melebihi Batas' else 'background-color: #21c354; color: white;'
-            
-            st.dataframe(merged.style.map(color_status, subset=['STATUS']), use_container_width=True)
-        else:
-            st.warning("Data belum dimuat.")
+    with tab_utama:
+        # [KODE LAMA KAMU UNTUK PENGELUARAN]
+        df_expense = load_expense_data()
+        st.title("PENGELUARAN OPERASIONAL")
+        st.dataframe(df_expense, use_container_width=True)
+
+    with tab_bbm:
+        st.title("⛽ Monitoring BBM & KM")
+        df_master = load_bbm_master()
+        df_sales = load_sales_data()
+        df_exp = load_expense_data()
+        
+        # Merge data KM dan Biaya
+        df_km = df_sales.groupby('NOPOL')['ALL ONE WAY'].sum().reset_index()
+        df_biaya = df_exp.groupby('NOPOL')['DEBIT'].sum().reset_index()
+        
+        df_master['NOPOL'] = df_master['NOPOL'].astype(str).str.strip().str.upper()
+        
+        merged = pd.merge(df_master, df_km, on='NOPOL', how='left').fillna(0)
+        merged = pd.merge(merged, df_biaya, on='NOPOL', how='left').fillna(0)
+        
+        # Logika Status
+        # Sesuaikan 'Rasio Standar Km/Liter' dengan nama kolom di sheet barumu
+        merged['BATAS_MAKS'] = (merged['ALL ONE WAY'] / merged['Rasio Standar Km/Liter']) * 7000 
+        merged['STATUS'] = merged.apply(lambda x: "Melebihi Batas" if x['DEBIT'] > x['BATAS_MAKS'] else "Masih Batas Aman", axis=1)
+        
+        # Styling
+        def color_status(val):
+            return 'background-color: #ff4b4b; color: white; font-weight: bold;' if val == 'Melebihi Batas' else 'background-color: #21c354; color: white; font-weight: bold;'
+        
+        st.dataframe(merged.style.map(color_status, subset=['STATUS']), use_container_width=True)
