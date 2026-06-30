@@ -227,7 +227,6 @@ if menu_pilihan == "📊 Performa Operasional ASG":
         
         total_sales = df_filtered['SALES'].sum()
         
-        # Penanganan nama kolom ALL_ONE_WAY di halaman utama
         km_col_name = 'ALL_ONE_WAY' if 'ALL_ONE_WAY' in df_filtered.columns else df_filtered.columns[-1]
         total_all_one_way = df_filtered[km_col_name].sum()
         
@@ -350,7 +349,7 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
             st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total Nopol Aktif</div><div class="kpi-value">{unique_nopol_count:,.0f} <span style="font-size:14px; font-weight:400; color:#6c757d;">Unit Armada</span></div></div>', unsafe_allow_html=True)
             
         # ======================================================================
-        # ⚠️ KONTROL BATASAN EFISIENSI BBM HPP (KM/Liter - FIX ALL_ONE_WAY)
+        # ⚠️ FIX PERMANEN KEYERROR: KONTROL BATASAN EFISIENSI BBM HPP (KM/Liter)
         # ======================================================================
         st.markdown("<div class='section-title'>⚠️ Kontrol Batasan Efisiensi BBM HPP (KM/Liter)</div>", unsafe_allow_html=True)
         
@@ -368,7 +367,9 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                 df_harga_live['TIPE_BBM_CLEAN'] = df_harga_live[df_harga_live.columns[0]].astype(str).str.strip().str.upper()
                 df_harga_live['HARGA_CLEAN'] = pd.to_numeric(df_harga_live[df_harga_live.columns[1]], errors='coerce').fillna(0)
                 
+                # --- SOLUSI ERROR: Satukan data master dan harga live ke df_rules terpisah ---
                 df_rules = pd.merge(df_master_mbl, df_harga_live, left_on='JENIS_BBM_CLEAN', right_on='TIPE_BBM_CLEAN', how='left')
+                
                 df_bbm_only = df_exp_filtered[df_exp_filtered['NAMA'].str.upper().str.contains("BAHAN BAKAR MINYAK HPP", na=False)]
                 
                 if df_bbm_only.empty:
@@ -376,7 +377,6 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                 else:
                     df_bbm_sum = df_bbm_only.groupby('NOPOL_KEY')['DEBIT'].sum().reset_index().rename(columns={'DEBIT': 'RUPIAH_BBM'})
                     
-                    # PERBAIKAN PERMANEN KEYERROR: Cek ketersediaan kolom kunci ALL_ONE_WAY / KM secara dinamis
                     km_target_col = 'ALL_ONE_WAY' if 'ALL_ONE_WAY' in df_sales_filtered.columns else (df_sales_filtered.columns[-1] if not df_sales_filtered.empty else 'ALL_ONE_WAY')
                     
                     if km_target_col in df_sales_filtered.columns:
@@ -385,7 +385,14 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                         df_km_sum = pd.DataFrame(columns=['NOPOL_KEY', 'KM_ONE_WAY'])
                     
                     df_merge_calc = pd.merge(df_bbm_sum, df_km_sum, on='NOPOL_KEY', how='outer').fillna(0)
-                    df_final_calc = pd.merge(df_merge_calc, df_rules[['NOPOL', 'NOPOL_KEY', tipe_mobil_title, 'JENIS_BBM_CLEAN', 'RASIO_CLEAN', 'HARGA_CLEAN']], on='NOPOL_KEY', how='inner')
+                    
+                    # --- PERBAIKAN MERGE: Ambil murni kolom-kolom yang PASTI eksis di df_rules ---
+                    df_final_calc = pd.merge(
+                        df_merge_calc, 
+                        df_rules[['NOPOL', 'NOPOL_KEY', tipe_mobil_title, 'JENIS_BBM_CLEAN', 'RASIO_CLEAN', 'HARGA_CLEAN']], 
+                        on='NOPOL_KEY', 
+                        how='inner'
+                    )
                     
                     if not df_final_calc.empty:
                         df_final_calc['JARAK_REAL_PP'] = df_final_calc['KM_ONE_WAY'] * 1.67
@@ -420,7 +427,7 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                             use_container_width=True, hide_index=True
                         )
                     else:
-                        st.info("ℹ️ Tidak ditemukan kecocokan data Nopol kendaraan pada filter ini.")
+                        st.info("ℹ nudge: Tidak ditemukan kecocokan data Nopol kendaraan pada filter ini.")
             else:
                 st.warning("Struktur kolom master data kendaraan tidak sesuai ekspektasi.")
         else:
