@@ -350,7 +350,7 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
             st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total Nopol Aktif</div><div class="kpi-value">{unique_nopol_count:,.0f} <span style="font-size:14px; font-weight:400; color:#6c757d;">Unit Armada</span></div></div>', unsafe_allow_html=True)
             
         # ======================================================================
-        # ⚠️ KONTROL BATASAN EFISIENSI BBM HPP (KM/Liter - PP Faktor 1.67)
+        # ⚠️ POSISI BARU: TABEL KONTROL EFISIENSI BBM DINAIKKAN KE SINI (DI BAWAH KPI)
         # ======================================================================
         st.markdown("<div class='section-title'>⚠️ Kontrol Batasan Efisiensi BBM HPP (KM/Liter)</div>", unsafe_allow_html=True)
         
@@ -369,10 +369,8 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                 df_harga_live['HARGA_CLEAN'] = pd.to_numeric(df_harga_live[df_harga_live.columns[1]], errors='coerce').fillna(0)
                 
                 df_rules = pd.merge(df_master_mbl, df_harga_live, left_on='JENIS_BBM_CLEAN', right_on='TIPE_BBM_CLEAN', how='left')
-                
                 df_bbm_only = df_exp_filtered[df_exp_filtered['NAMA'].str.upper().str.contains("BAHAN BAKAR MINYAK HPP", na=False)]
                 
-                # PROTEKSI UTAMA: Cek jika data transaksi BBM hasil filter kosong, jangan jalankan kalkulasi
                 if df_bbm_only.empty:
                     st.info("ℹ️ Belum ada data pemakaian BBM HPP pada filter yang Anda pilih saat ini.")
                 else:
@@ -384,15 +382,12 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                     
                     if not df_final_calc.empty:
                         df_final_calc['JARAK_REAL_PP'] = df_final_calc['KM_ONE_WAY'] * 1.67
-                        
                         df_final_calc['ESTIMASI_LITER'] = df_final_calc.apply(
                             lambda r: r['RUPIAH_BBM'] / r['HARGA_CLEAN'] if r['HARGA_CLEAN'] > 0 else 0, axis=1
                         )
-                        
                         df_final_calc['RASIO_LAPANGAN_KM_L'] = df_final_calc.apply(
                             lambda r: r['JARAK_REAL_PP'] / r['ESTIMASI_LITER'] if r['ESTIMASI_LITER'] > 0 else 0, axis=1
                         )
-                        
                         df_final_calc['STATUS'] = df_final_calc.apply(
                             lambda r: "⚠️ BOROS / OVER BUDGET" if r['RASIO_LAPANGAN_KM_L'] < r['RASIO_CLEAN'] and r['ESTIMASI_LITER'] > 0 else ("✅ AMAN" if r['ESTIMASI_LITER'] > 0 else "Data Tidak Lengkap"), axis=1
                         )
@@ -431,6 +426,9 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
             st.info("Jika ada perubahan nilai harga bbm resmi, kamu cukup ganti di Google Sheets saja.")
             
         # ======================================================================
+        # KEMBALI KE POSISI GRAFIK & LIST SEMULA (DIPISAHKAN DENGAN SEKAT RAPI)
+        # ======================================================================
+        st.markdown("<br><hr style='border: 0.5px solid rgba(235, 94, 40, 0.1);'><br>", unsafe_allow_html=True)
 
         st.markdown("<div class='section-title'>Analisis Grafik Biaya</div>", unsafe_allow_html=True)
         col_g1, col_g2 = st.columns(2)
