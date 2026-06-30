@@ -349,27 +349,30 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
             st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total Nopol Aktif</div><div class="kpi-value">{unique_nopol_count:,.0f} <span style="font-size:14px; font-weight:400; color:#6c757d;">Unit Armada</span></div></div>', unsafe_allow_html=True)
             
         # ======================================================================
-        # ⚠️ FIX PERMANEN KEYERROR: KONTROL BATASAN EFISIENSI BBM HPP (KM/Liter)
+        # ⚠️ FIX AMAN TOTAL: KONTROL BATASAN EFISIENSI BBM HPP (KM/Liter)
         # ======================================================================
         st.markdown("<div class='section-title'>⚠️ Kontrol Batasan Efisiensi BBM HPP (KM/Liter)</div>", unsafe_allow_html=True)
         
         if not df_master_mbl.empty and not df_harga_live.empty:
-            bbm_col_master = [c for c in df_master_mbl.columns if 'BBM' in c or 'BAHAN' in c]
-            mobil_col_master = [c for c in df_master_mbl.columns if 'MOBIL' in c or 'ARMADA' in c]
-            rasio_col_master = [c for c in df_master_mbl.columns if 'RASIO' in c or 'BATAS' in c]
+            # Cari nama kolom secara fleksibel tanpa membuat kolom buatan baru yang rawan KeyError
+            bbm_col_master = [c for c in df_master_mbl.columns if 'BBM' in c or 'BAHAN' in c] [cite: 2]
+            mobil_col_master = [c for c in df_master_mbl.columns if 'MOBIL' in c or 'ARMADA' in c] [cite: 2]
+            rasio_col_master = [c for c in df_master_mbl.columns if 'RASIO' in c or 'BATAS' in c] [cite: 2]
             
             if bbm_col_master and rasio_col_master:
-                df_master_mbl['JENIS_BBM_CLEAN'] = df_master_mbl[bbm_col_master[0]].astype(str).str.strip().str.upper()
-                df_master_mbl['RASIO_CLEAN'] = pd.to_numeric(df_master_mbl[rasio_col_master[0]], errors='coerce').fillna(0)
+                # Ambil judul kolom asli agar tidak memicu KeyError index
+                nama_kolom_bbm = bbm_col_master[0]
+                nama_kolom_rasio = rasio_col_master[0]
+                nama_kolom_mobil = mobil_col_master[0] if mobil_col_master else df_master_mbl.columns[2]
                 
-                tipe_mobil_title = mobil_col_master[0] if mobil_col_master else df_master_mbl.columns[1]
+                # Standarisasi data di df_master_mbl & df_harga_live murni pada kolom yang ada
+                df_master_mbl[nama_kolom_bbm] = df_master_mbl[nama_kolom_bbm].astype(str).str.strip().str.upper()
+                df_harga_live[df_harga_live.columns[0]] = df_harga_live[df_harga_live.columns[0]].astype(str).str.strip().str.upper()
                 
-                df_harga_live['TIPE_BBM_CLEAN'] = df_harga_live[df_harga_live.columns[0]].astype(str).str.strip().str.upper()
-                df_harga_live['HARGA_CLEAN'] = pd.to_numeric(df_harga_live[df_harga_live.columns[1]], errors='coerce').fillna(0)
+                # Gabungkan master dan harga live secara langsung
+                df_rules = pd.merge(df_master_mbl, df_harga_live, left_on=nama_kolom_bbm, right_on=df_harga_live.columns[0], how='left')
                 
-                # --- SOLUSI ERROR: Satukan data master dan harga live ke df_rules terpisah ---
-                df_rules = pd.merge(df_master_mbl, df_harga_live, left_on='JENIS_BBM_CLEAN', right_on='TIPE_BBM_CLEAN', how='left')
-                
+                # Filter pengeluaran BBM
                 df_bbm_only = df_exp_filtered[df_exp_filtered['NAMA'].str.upper().str.contains("BAHAN BAKAR MINYAK HPP", na=False)]
                 
                 if df_bbm_only.empty:
@@ -386,24 +389,26 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                     
                     df_merge_calc = pd.merge(df_bbm_sum, df_km_sum, on='NOPOL_KEY', how='outer').fillna(0)
                     
-                    # --- PERBAIKAN MERGE: Ambil murni kolom-kolom yang PASTI eksis di df_rules ---
-                    df_final_calc = pd.merge(
-                        df_merge_calc, 
-                        df_rules[['NOPOL', 'NOPOL_KEY', tipe_mobil_title, 'JENIS_BBM_CLEAN', 'RASIO_CLEAN', 'HARGA_CLEAN']], 
-                        on='NOPOL_KEY', 
-                        how='inner'
-                    )
+                    # --- SOLUSI ANTI-KEYERROR: Gabungkan UTUH seluruh tabel tanpa mengiris kolom terlebih dahulu ---
+                    df_final_calc = pd.merge(df_merge_calc, df_rules, on='NOPOL_KEY', how='inner')
                     
                     if not df_final_calc.empty:
+                        # Ambil nilai harga bbm & target rasio secara dinamis berdasarkan kolom asli
+                        harga_per_liter_col = df_harga_live.columns[1]
+                        
+                        df_final_calc['HARGA_BBM_RIIL'] = pd.to_numeric(df_final_calc[harga_per_liter_col], errors='coerce').fillna(0)
+                        df_final_calc['TARGET_RASIO_RIIL'] = pd.to_numeric(df_final_calc[nama_kolom_rasio], errors='coerce').fillna(0)
+                        
+                        # Jalankan matematika operasional
                         df_final_calc['JARAK_REAL_PP'] = df_final_calc['KM_ONE_WAY'] * 1.67
                         df_final_calc['ESTIMASI_LITER'] = df_final_calc.apply(
-                            lambda r: r['RUPIAH_BBM'] / r['HARGA_CLEAN'] if r['HARGA_CLEAN'] > 0 else 0, axis=1
+                            lambda r: r['RUPIAH_BBM'] / r['HARGA_BBM_RIIL'] if r['HARGA_BBM_RIIL'] > 0 else 0, axis=1
                         )
                         df_final_calc['RASIO_LAPANGAN_KM_L'] = df_final_calc.apply(
                             lambda r: r['JARAK_REAL_PP'] / r['ESTIMASI_LITER'] if r['ESTIMASI_LITER'] > 0 else 0, axis=1
                         )
                         df_final_calc['STATUS'] = df_final_calc.apply(
-                            lambda r: "⚠️ BOROS / OVER BUDGET" if r['RASIO_LAPANGAN_KM_L'] < r['RASIO_CLEAN'] and r['ESTIMASI_LITER'] > 0 else ("✅ AMAN" if r['ESTIMASI_LITER'] > 0 else "Data Tidak Lengkap"), axis=1
+                            lambda r: "⚠️ BOROS / OVER BUDGET" if r['RASIO_LAPANGAN_KM_L'] < r['TARGET_RASIO_RIIL'] and r['ESTIMASI_LITER'] > 0 else ("✅ AMAN" if r['ESTIMASI_LITER'] > 0 else "Data Tidak Lengkap"), axis=1
                         )
                         
                         list_over = df_final_calc[df_final_calc['STATUS'] == "⚠️ BOROS / OVER BUDGET"]['NOPOL'].tolist()
@@ -412,8 +417,18 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                         else:
                             st.success("✅ Seluruh unit kendaraan beroperasi dengan pemakaian BBM yang aman dan efisien sesuai target.")
                             
-                        df_view_bbm = df_final_calc[['NOPOL', tipe_mobil_title, 'JENIS_BBM_CLEAN', 'RASIO_CLEAN', 'RUPIAH_BBM', 'KM_ONE_WAY', 'JARAK_REAL_PP', 'ESTIMASI_LITER', 'RASIO_LAPANGAN_KM_L', 'STATUS']].copy()
-                        df_view_bbm.columns = ['NO POLISI', 'TIPE MOBIL', 'BAHAN BAKAR', 'TARGET RASIO', 'TOTAL BELANJA BBM', 'KM ONE WAY', 'JARAK REAL PP (x1.67)', 'ESTIMASI LITER', 'RASIO LAPANGAN (KM/L)', 'STATUS']
+                        # Buat salinan data akhir khusus untuk visualisasi tampilan tabel user
+                        df_view_bbm = pd.DataFrame()
+                        df_view_bbm['NO POLISI'] = df_final_calc['NOPOL']
+                        df_view_bbm['TIPE MOBIL'] = df_final_calc[nama_kolom_mobil]
+                        df_view_bbm['BAHAN BAKAR'] = df_final_calc[nama_kolom_bbm]
+                        df_view_bbm['TARGET RASIO'] = df_final_calc['TARGET_RASIO_RIIL']
+                        df_view_bbm['TOTAL BELANJA BBM'] = df_final_calc['RUPIAH_BBM']
+                        df_view_bbm['KM ONE WAY'] = df_final_calc['KM_ONE_WAY']
+                        df_view_bbm['JARAK REAL PP (x1.67)'] = df_final_calc['JARAK_REAL_PP']
+                        df_view_bbm['ESTIMASI LITER'] = df_final_calc['ESTIMASI_LITER']
+                        df_view_bbm['RASIO LAPANGAN (KM/L)'] = df_final_calc['RASIO_LAPANGAN_KM_L']
+                        df_view_bbm['STATUS'] = df_final_calc['STATUS']
                         
                         st.dataframe(
                             df_view_bbm.style.format({
@@ -427,7 +442,7 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                             use_container_width=True, hide_index=True
                         )
                     else:
-                        st.info("ℹ nudge: Tidak ditemukan kecocokan data Nopol kendaraan pada filter ini.")
+                        st.info("ℹ️ Tidak ditemukan kecocokan data Nopol kendaraan pada filter ini.")
             else:
                 st.warning("Struktur kolom master data kendaraan tidak sesuai ekspektasi.")
         else:
