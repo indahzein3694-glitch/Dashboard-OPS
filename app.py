@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 from datetime import datetime
 
-# 1. Page Configuration & Theme
+# ==============================================================================
+# 1. PAGE CONFIGURATION & THEME STYLE
+# ==============================================================================
 st.set_page_config(
     page_title="ASG Operations & Expense Dashboard",
     page_icon="📊",
@@ -66,24 +66,34 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# 2. DATA LOADING FUNCTIONS
+# ==============================================================================
+# 2. DATA LOADING FUNCTIONS FROM MULTI-SPREADSHEETS
+# ==============================================================================
 
-# --- Fungsi Load Data Master Kendaraan (Batas Rasio BBM) ---
+# --- Load Master Kendaraan & Harga BBM ---
 @st.cache_data(ttl=600)
-def load_master_kendaraan():
+def load_master_data_kendaraan():
     sheet_id = "1TKznhfQwdPSdMu4dPxoMXis-3jR9QRCAqLAUzBAftpk"
-    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv"
+    
+    # Ambil Sheet Master Kendaraan (Lembar ke-1)
+    url_master = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=MASTER+KENDARAAN"
+    # Ambil Sheet Harga BBM (Lembar ke-2)
+    url_harga = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=HARGA_BBM"
+    
     try:
-        df = pd.read_csv(url)
-        df.columns = [c.strip().upper() for c in df.columns]
-        # Bersihkan spasi pada NOPOL master agar mudah dijodohkan
-        if 'NOPOL' in df.columns:
-            df['NOPOL_KEY'] = df['NOPOL'].astype(str).str.replace(' ', '', regex=False).str.upper()
-        return df
+        df_m = pd.read_csv(url_master)
+        df_m.columns = [c.strip().upper() for c in df_m.columns]
+        if 'NOPOL' in df_m.columns:
+            df_m['NOPOL_KEY'] = df_m['NOPOL'].astype(str).str.replace(' ', '', regex=False).str.upper()
+            
+        df_h = pd.read_csv(url_harga)
+        df_h.columns = [c.strip().upper() for c in df_h.columns]
+        
+        return df_m, df_h
     except Exception as e:
-        return pd.DataFrame()
+        return pd.DataFrame(), pd.DataFrame()
 
-# --- Fungsi Load Data 1: PERFORMA SALES & RITASE ---
+# --- Load Laporan Sales & Ritase (Total KM) ---
 @st.cache_data(ttl=600)
 def load_sales_data():
     sheet_id = "1Z3sGqENFtjF-gGsRuN4lLUhmGZa5X1AbVx8Ueu-63YQ"
@@ -99,8 +109,6 @@ def load_sales_data():
         if 'SALES' in df.columns:
             df['SALES'] = df['SALES'].astype(str).str.replace('Rp', '', regex=False).str.replace(',', '', regex=False).str.strip()
             df['SALES'] = pd.to_numeric(df['SALES'], errors='coerce').fillna(0)
-        else:
-            df['SALES'] = 0
             
         df['RITASE'] = pd.to_numeric(df['RITASE'], errors='coerce').fillna(0)
         df['YEAR'] = df['TANGGAL'].dt.year.astype(int)
@@ -122,6 +130,7 @@ def load_sales_data():
         else:
             df['STORE'] = 'TANPA NAMA'
             
+        # Saring baris hantu kosong
         df = df[df['STORE'].str.strip() != ''].copy()
         df = df[df['STORE'] != 'TANPA NAMA'].copy()
         df = df[df['STORE'] != 'NAN'].copy()
@@ -132,7 +141,7 @@ def load_sales_data():
     except Exception as e:
         return pd.DataFrame()
 
-# --- Fungsi Load Data 2: PENGELUARAN ---
+# --- Load Pengeluaran Operasional ---
 @st.cache_data(ttl=600)
 def load_expense_data():
     sheet_id = "1ODK1VYWR6xtFGmpo6CYaLdtzucw2d4uKFDibj8DU3OE"
@@ -152,11 +161,10 @@ def load_expense_data():
         if 'DEBIT' in df.columns:
             df['DEBIT'] = df['DEBIT'].astype(str).str.replace('Rp', '', regex=False).str.replace(',', '', regex=False).str.strip()
             df['DEBIT'] = pd.to_numeric(df['DEBIT'], errors='coerce').fillna(0)
-        else:
-            df['DEBIT'] = 0
             
         df['STORE'] = df['STORE'].fillna('TANPA NAMA').astype(str).str.strip().str.upper()
         
+        # Saring baris hantu kosong
         df = df[df['STORE'].str.strip() != ''].copy()
         df = df[df['STORE'] != 'TANPA NAMA'].copy()
         df = df[df['STORE'] != 'NAN'].copy()
@@ -169,7 +177,9 @@ def load_expense_data():
         return pd.DataFrame()
 
 
+# ==============================================================================
 # 3. SIDEBAR NAVIGATION MENU
+# ==============================================================================
 st.sidebar.image("https://img.icons8.com/fluent/96/000000/dashboard.png", width=80)
 st.sidebar.markdown("<h2 style='color: #ff5722; font-weight:700; margin-bottom:20px;'>MENU UTAMA</h2>", unsafe_allow_html=True)
 
@@ -280,13 +290,13 @@ if menu_pilihan == "📊 Performa Operasional ASG":
 elif menu_pilihan == "💸 Pengeluaran Operasional":
     df_expense = load_expense_data()
     df_sales_for_km = load_sales_data()
-    df_master_mbl = load_master_kendaraan()
+    df_master_mbl, df_harga_live = load_master_data_kendaraan()
     
     if df_expense.empty:
         st.error("Gagal mengambil data Pengeluaran. Pastikan link Google Sheet Pengeluaran sudah Publik.")
     else:
         st.markdown("<h1 style='color: #ff5722; font-weight:800; margin-bottom: 5px;'>PENGELUARAN OPERASIONAL</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='color: #6c757d; font-size: 15px; margin-bottom: 25px;'>Operasional ASG • Real-time Cost Tracking & Fuel Budget Alert</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #6c757d; font-size: 15px; margin-bottom: 25px;'>Operasional ASG • Real-time Cost Tracking & Fuel Efficiency Control Menu</p>", unsafe_allow_html=True)
         
         st.markdown("<b style='color:#ff5722;'>⚙️ PANEL FILTER DATA PENGELUARAN</b>", unsafe_allow_html=True)
         f_col1, f_col2, f_col3 = st.columns(3)
@@ -338,61 +348,83 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
         with exp_kpi2:
             st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total Nopol Aktif</div><div class="kpi-value">{unique_nopol_count:,.0f} <span style="font-size:14px; font-weight:400; color:#6c757d;">Unit Armada</span></div></div>', unsafe_allow_html=True)
             
-        # --- FITUR BARU: ANALSIS & PERINGATAN PEMAKAIAN BBM ---
-        st.markdown("<div class='section-title'>⚠️ Peringatan & Kontrol Efisiensi BBM HPP</div>", unsafe_allow_html=True)
+        # ======================================================================
+        # ⚠️ FITUR BARU BERDASARKAN PERMINTAAN: KONTROL EFISIENSI KM/L (PP 1.67)
+        # ======================================================================
+        st.markdown("<div class='section-title'>⚠️ Kontrol Batasan Efisiensi BBM HPP (KM/Liter)</div>", unsafe_allow_html=True)
         
-        if not df_master_mbl.empty:
-            # 1. Ambil Pengeluaran khusus untuk "BAHAN BAKAR MINYAK HPP"
+        if not df_master_mbl.empty and not df_harga_live.empty:
+            # Pastikan kolom join bersih kapital & trim spasi
+            df_master_mbl['JENIS BBM'] = df_master_mbl['JENIS BBM'].astype(str).str.strip().str.upper()
+            df_harga_live['TIPE_BBM'] = df_harga_live['TIPE_BBM'].astype(str).str.strip().str.upper()
+            df_harga_live['HARGA_PER_LITER'] = pd.to_numeric(df_harga_live['HARGA_PER_LITER'], errors='coerce').fillna(0)
+            
+            # Hubungkan tipe bbm master dengan harga per liternya
+            df_rules = pd.merge(df_master_mbl, df_harga_live, left_on='JENIS BBM', right_on='TIPE_BBM', how='left')
+            
+            # Filter pengeluaran khusus "Bahan Bakar Minyak HPP"
             df_bbm_only = df_exp_filtered[df_exp_filtered['NAMA'].str.upper().str.contains("BAHAN BAKAR MINYAK HPP", na=False)]
-            df_bbm_sum = df_bbm_only.groupby('NOPOL_KEY')['DEBIT'].sum().reset_index().rename(columns={'DEBIT': 'TOTAL_RUPIAH_BBM'})
+            df_bbm_sum = df_bbm_only.groupby('NOPOL_KEY')['DEBIT'].sum().reset_index().rename(columns={'DEBIT': 'RUPIAH_BBM'})
             
-            # 2. Ambil Total KM (ALL ONE WAY) dari data Laporan
-            df_km_sum = df_sales_filtered.groupby('NOPOL_KEY')['ALL ONE WAY'].sum().reset_index().rename(columns={'ALL ONE WAY': 'TOTAL_KM'})
+            # Ambil Jarak dari Laporan
+            df_km_sum = df_sales_filtered.groupby('NOPOL_KEY')['ALL ONE WAY'].sum().reset_index().rename(columns={'ALL ONE WAY': 'KM_ONE_WAY'})
             
-            # 3. Gabungkan BBM, KM, dan Target Batasan dari Master
-            df_analisis_bbm = pd.merge(df_bbm_sum, df_km_sum, on='NOPOL_KEY', how='outer').fillna(0)
+            # Satukan seluruh data perhitungan
+            df_merge_calc = pd.merge(df_bbm_sum, df_km_sum, on='NOPOL_KEY', how='outer').fillna(0)
+            df_final_calc = pd.merge(df_merge_calc, df_rules[['NOPOL', 'NOPOL_KEY', 'JENIS MOBIL', 'JENIS BBM', 'RASIO', 'HARGA_PER_LITER']], on='NOPOL_KEY', how='inner')
             
-            # Ambil NOPOL asli dan target RASIO dari sheet master kendaraan
-            # Cari nama kolom rasio yang ada di master (misal 'RASIO' atau 'BATASAN')
-            rasio_col = [c for c in df_master_mbl.columns if 'RASIO' in c or 'BATAS' in c]
-            if rasio_col:
-                df_master_sub = df_master_mbl[['NOPOL', 'NOPOL_KEY', rasio_col[0]]]
-                df_analisis_bbm = pd.merge(df_analisis_bbm, df_master_sub, on='NOPOL_KEY', how='inner')
-                df_analisis_bbm = df_analisis_bbm.rename(columns={rasio_col[0]: 'TARGET_RASIO'})
-                
-                # Hitung Rasio Riil (Rp/KM)
-                df_analisis_bbm['RASIO_AKTUAL_RP_KM'] = df_analisis_bbm.apply(
-                    lambda r: r['TOTAL_RUPIAH_BBM'] / r['TOTAL_KM'] if r['TOTAL_KM'] > 0 else 0, axis=1
-                )
-                
-                # Cek Batasan Over Budget
-                df_analisis_bbm['STATUS'] = df_analisis_bbm.apply(
-                    lambda r: "⚠️ OVER BUDGET" if r['RASIO_AKTUAL_RP_KM'] > r['TARGET_RASIO'] else "✅ AMAN", axis=1
-                )
-                
-                # Susun dataframe untuk ditampilkan
-                df_bbm_display = df_analisis_bbm[['NOPOL', 'TOTAL_RUPIAH_BBM', 'TOTAL_KM', 'TARGET_RASIO', 'RASIO_AKTUAL_RP_KM', 'STATUS']].copy()
-                
-                # Peringatan berbentuk alert box jika ada yang over budget
-                over_budget_units = df_bbm_display[df_bbm_display['STATUS'] == "⚠️ OVER BUDGET"]['NOPOL'].tolist()
-                if over_budget_units:
-                    st.error(f"⚠️ **PERINGATAN OPERASIONAL!** Unit berikut telah melebihi batas target konsumsi BBM: {', '.join(over_budget_units)}")
-                else:
-                    st.success("✅ Seluruh armada masih beroperasi dalam batas normal anggaran BBM.")
-                
-                # Format Tampilan Tabel
-                df_bbm_display['TOTAL_RUPIAH_BBM'] = df_bbm_display['TOTAL_RUPIAH_BBM'].apply(lambda x: f"Rp {x:,.0f}")
-                df_bbm_display['TOTAL_KM'] = df_bbm_display['TOTAL_KM'].apply(lambda x: f"{x:,.0f} KM")
-                df_bbm_display['TARGET_RASIO'] = df_bbm_display['TARGET_RASIO'].apply(lambda x: f"Rp {x:,.0f} /KM")
-                df_bbm_display['RASIO_AKTUAL_RP_KM'] = df_bbm_display['RASIO_AKTUAL_RP_KM'].apply(lambda x: f"Rp {x:,.0f} /KM")
-                
-                st.dataframe(df_bbm_display, use_container_width=True, hide_index=True)
+            # --- EKSEKUSI INTEGRASI RUMUS PERMINTAAN USER ---
+            # 1. Jarak Real PP = Jarak Berangkat dikali Faktor 1.67
+            df_final_calc['JARAK_REAL_PP'] = df_final_calc['KM_ONE_WAY'] * 1.67
+            
+            # 2. Estimasi Liter Terpakai = Uang Belanja dibagi Harga per Liter
+            df_final_calc['ESTIMASI_LITER'] = df_final_calc.apply(
+                lambda r: r['RUPIAH_BBM'] / r['HARGA_PER_LITER'] if r['HARGA_PER_LITER'] > 0 else 0, axis=1
+            )
+            
+            # 3. Hitung Rasio Lapangan Riil (KM/L) = Jarak PP / Estimasi Liter
+            df_final_calc['RASIO_LAPANGAN_KM_L'] = df_final_calc.apply(
+                lambda r: r['JARAK_REAL_PP'] / r['ESTIMASI_LITER'] if r['ESTIMASI_LITER'] > 0 else 0, axis=1
+            )
+            
+            # 4. Status Evaluasi (Peringatan diaktifkan jika Rasio Lapangan DIBAWAH target Rasio Master)
+            df_final_calc['STATUS'] = df_final_calc.apply(
+                lambda r: "⚠️ BOROS / OVER BUDGET" if r['RASIO_LAPANGAN_KM_L'] < r['RASIO'] and r['ESTIMASI_LITER'] > 0 else ("✅ AMAN" if r['ESTIMASI_LITER'] > 0 else "Data Tidak Lengkap"), axis=1
+            )
+            
+            # Alert Merah Banner di atas tabel jika ada armada yang jebol budget
+            list_over = df_final_calc[df_final_calc['STATUS'] == "⚠️ BOROS / OVER BUDGET"]['NOPOL'].tolist()
+            if list_over:
+                st.error(f"⚠️ **PERINGATAN MONITORING BBM:** Armada berikut terdeteksi boros / tidak mencapai target efisiensi jarak rute PP: {', '.join(list_over)}")
             else:
-                st.warning("Kolom target 'RASIO' atau 'BATASAN' tidak ditemukan di file Master Kendaraan barumu.")
-        else:
-            st.warning("Gagal memuat Data Master Kendaraan. Pastikan file Google Sheet Master sudah publik.")
+                st.success("✅ Seluruh unit kendaraan beroperasi dengan pemakaian BBM yang aman dan efisien sesuai target.")
+                
+            # Filter tabel tampilan sub-kolom
+            df_view_bbm = df_final_calc[['NOPOL', 'JENIS MOBIL', 'JENIS BBM', 'RASIO', 'RUPIAH_BBM', 'KM_ONE_WAY', 'JARAK_REAL_PP', 'ESTIMASI_LITER', 'RASIO_LAPANGAN_KM_L', 'STATUS']].copy()
+            df_view_bbm.columns = ['NO POLISI', 'TIPE MOBIL', 'BAHAN BAKAR', 'TARGET RASIO', 'TOTAL BELANJA BBM', 'KM ONE WAY', 'JARAK REAL PP (x1.67)', 'ESTIMASI LITER', 'RASIO LAPANGAN (KM/L)', 'STATUS']
             
-        # --- Selesai Fitur BBM ---
+            st.dataframe(
+                df_view_bbm.style.format({
+                    'TARGET RASIO': '{:,.1f} KM/L',
+                    'TOTAL BELANJA BBM': 'Rp {:,.0f}',
+                    'KM ONE WAY': '{:,.1f} KM',
+                    'JARAK REAL PP (x1.67)': '{:,.1f} KM',
+                    'ESTIMASI LITER': '{:,.2f} L',
+                    'RASIO LAPANGAN (KM/L)': '{:,.2f} KM/L'
+                }),
+                use_container_width=True, hide_index=True
+            )
+        else:
+            st.warning("Data Master Kendaraan / Live Harga BBM gagal dimuat. Pastikan penulisan Sheet Name sudah benar.")
+            
+        # Tampilkan tabel daftar harga monitor di sidebar bantuan
+        with st.sidebar:
+            st.markdown("### 📋 Live Monitor Harga BBM")
+            if not df_harga_live.empty:
+                st.table(df_harga_live.rename(columns={'TIPE_BBM': 'Tipe BBM', 'HARGA_PER_LITER': 'Harga/Liter'}))
+            st.info("Jika ada perubahan nilai harga bbm resmi, kamu cukup ganti di Google Sheets saja tanpa ubah kodingan ini.")
+            
+        # ======================================================================
 
         st.markdown("<div class='section-title'>Analisis Grafik Biaya</div>", unsafe_allow_html=True)
         col_g1, col_g2 = st.columns(2)
