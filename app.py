@@ -349,30 +349,30 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
             st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total Nopol Aktif</div><div class="kpi-value">{unique_nopol_count:,.0f} <span style="font-size:14px; font-weight:400; color:#6c757d;">Unit Armada</span></div></div>', unsafe_allow_html=True)
             
         # ======================================================================
-        # ⚠️ FIX AMAN TOTAL: KONTROL BATASAN EFISIENSI BBM HPP (KM/Liter)
+        # ⚠️ SOLUSI NAMEERROR FIX: SELEKSI DAN KALKULASI BERDASARKAN VARIABEL BENAR
         # ======================================================================
         st.markdown("<div class='section-title'>⚠️ Kontrol Batasan Efisiensi BBM HPP (KM/Liter)</div>", unsafe_allow_html=True)
         
         if not df_master_mbl.empty and not df_harga_live.empty:
-            # Cari nama kolom secara fleksibel tanpa membuat kolom buatan baru yang rawan KeyError
-            bbm_col_master = [c for c in df_master_mbl.columns if 'BBM' in c or 'BAHAN' in c] [cite: 2]
-            mobil_col_master = [c for c in df_master_mbl.columns if 'MOBIL' in c or 'ARMADA' in c] [cite: 2]
-            rasio_col_master = [c for c in df_master_mbl.columns if 'RASIO' in c or 'BATAS' in c] [cite: 2]
+            # Menggunakan df_master_mbl secara konsisten sesuai variabel yang dipanggil di atas
+            bbm_col_master = [c for c in df_master_mbl.columns if 'BBM' in c or 'BAHAN' in c]
+            mobil_col_master = [c for c in df_master_mbl.columns if 'MOBIL' in c or 'ARMADA' in c]
+            rasio_col_master = [c for c in df_master_mbl.columns if 'RASIO' in c or 'BATAS' in c]
             
             if bbm_col_master and rasio_col_master:
-                # Ambil judul kolom asli agar tidak memicu KeyError index
                 nama_kolom_bbm = bbm_col_master[0]
                 nama_kolom_rasio = rasio_col_master[0]
                 nama_kolom_mobil = mobil_col_master[0] if mobil_col_master else df_master_mbl.columns[2]
                 
-                # Standarisasi data di df_master_mbl & df_harga_live murni pada kolom yang ada
-                df_master_mbl[nama_kolom_bbm] = df_master_mbl[nama_kolom_bbm].astype(str).str.strip().str.upper()
-                df_harga_live[df_harga_live.columns[0]] = df_harga_live[df_harga_live.columns[0]].astype(str).str.strip().str.upper()
+                # Menghindari modifikasi inplace yang merusak struktur master
+                df_master_working = df_master_mbl.copy()
+                df_master_working[nama_kolom_bbm] = df_master_working[nama_kolom_bbm].astype(str).str.strip().str.upper()
                 
-                # Gabungkan master dan harga live secara langsung
-                df_rules = pd.merge(df_master_mbl, df_harga_live, left_on=nama_kolom_bbm, right_on=df_harga_live.columns[0], how='left')
+                df_harga_working = df_harga_live.copy()
+                df_harga_working[df_harga_working.columns[0]] = df_harga_working[df_harga_working.columns[0]].astype(str).str.strip().str.upper()
                 
-                # Filter pengeluaran BBM
+                df_rules = pd.merge(df_master_working, df_harga_working, left_on=nama_kolom_bbm, right_on=df_harga_working.columns[0], how='left')
+                
                 df_bbm_only = df_exp_filtered[df_exp_filtered['NAMA'].str.upper().str.contains("BAHAN BAKAR MINYAK HPP", na=False)]
                 
                 if df_bbm_only.empty:
@@ -388,18 +388,14 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                         df_km_sum = pd.DataFrame(columns=['NOPOL_KEY', 'KM_ONE_WAY'])
                     
                     df_merge_calc = pd.merge(df_bbm_sum, df_km_sum, on='NOPOL_KEY', how='outer').fillna(0)
-                    
-                    # --- SOLUSI ANTI-KEYERROR: Gabungkan UTUH seluruh tabel tanpa mengiris kolom terlebih dahulu ---
                     df_final_calc = pd.merge(df_merge_calc, df_rules, on='NOPOL_KEY', how='inner')
                     
                     if not df_final_calc.empty:
-                        # Ambil nilai harga bbm & target rasio secara dinamis berdasarkan kolom asli
-                        harga_per_liter_col = df_harga_live.columns[1]
+                        harga_per_liter_col = df_harga_working.columns[1]
                         
                         df_final_calc['HARGA_BBM_RIIL'] = pd.to_numeric(df_final_calc[harga_per_liter_col], errors='coerce').fillna(0)
                         df_final_calc['TARGET_RASIO_RIIL'] = pd.to_numeric(df_final_calc[nama_kolom_rasio], errors='coerce').fillna(0)
                         
-                        # Jalankan matematika operasional
                         df_final_calc['JARAK_REAL_PP'] = df_final_calc['KM_ONE_WAY'] * 1.67
                         df_final_calc['ESTIMASI_LITER'] = df_final_calc.apply(
                             lambda r: r['RUPIAH_BBM'] / r['HARGA_BBM_RIIL'] if r['HARGA_BBM_RIIL'] > 0 else 0, axis=1
@@ -417,7 +413,6 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                         else:
                             st.success("✅ Seluruh unit kendaraan beroperasi dengan pemakaian BBM yang aman dan efisien sesuai target.")
                             
-                        # Buat salinan data akhir khusus untuk visualisasi tampilan tabel user
                         df_view_bbm = pd.DataFrame()
                         df_view_bbm['NO POLISI'] = df_final_calc['NOPOL']
                         df_view_bbm['TIPE MOBIL'] = df_final_calc[nama_kolom_mobil]
