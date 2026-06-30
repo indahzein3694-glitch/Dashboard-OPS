@@ -371,47 +371,54 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                 df_rules = pd.merge(df_master_mbl, df_harga_live, left_on='JENIS_BBM_CLEAN', right_on='TIPE_BBM_CLEAN', how='left')
                 
                 df_bbm_only = df_exp_filtered[df_exp_filtered['NAMA'].str.upper().str.contains("BAHAN BAKAR MINYAK HPP", na=False)]
-                df_bbm_sum = df_bbm_only.groupby('NOPOL_KEY')['DEBIT'].sum().reset_index().rename(columns={'DEBIT': 'RUPIAH_BBM'})
                 
-                df_km_sum = df_sales_filtered.groupby('NOPOL_KEY')['ALL ONE WAY'].sum().reset_index().rename(columns={'ALL ONE WAY': 'KM_ONE_WAY'})
-                
-                df_merge_calc = pd.merge(df_bbm_sum, df_km_sum, on='NOPOL_KEY', how='outer').fillna(0)
-                df_final_calc = pd.merge(df_merge_calc, df_rules[['NOPOL', 'NOPOL_KEY', tipe_mobil_title, 'JENIS_BBM_CLEAN', 'RASIO_CLEAN', 'HARGA_CLEAN']], on='NOPOL_KEY', how='inner')
-                
-                df_final_calc['JARAK_REAL_PP'] = df_final_calc['KM_ONE_WAY'] * 1.67
-                
-                df_final_calc['ESTIMASI_LITER'] = df_final_calc.apply(
-                    lambda r: r['RUPIAH_BBM'] / r['HARGA_CLEAN'] if r['HARGA_CLEAN'] > 0 else 0, axis=1
-                )
-                
-                df_final_calc['RASIO_LAPANGAN_KM_L'] = df_final_calc.apply(
-                    lambda r: r['JARAK_REAL_PP'] / r['ESTIMASI_LITER'] if r['ESTIMASI_LITER'] > 0 else 0, axis=1
-                )
-                
-                df_final_calc['STATUS'] = df_final_calc.apply(
-                    lambda r: "⚠️ BOROS / OVER BUDGET" if r['RASIO_LAPANGAN_KM_L'] < r['RASIO_CLEAN'] and r['ESTIMASI_LITER'] > 0 else ("✅ AMAN" if r['ESTIMASI_LITER'] > 0 else "Data Tidak Lengkap"), axis=1
-                )
-                
-                list_over = df_final_calc[df_final_calc['STATUS'] == "⚠️ BOROS / OVER BUDGET"]['NOPOL'].tolist()
-                if list_over:
-                    st.error(f"⚠️ **PERINGATAN MONITORING BBM:** Armada berikut terdeteksi boros / tidak mencapai target efisiensi jarak rute PP: {', '.join(list_over)}")
+                # PROTEKSI UTAMA: Cek jika data transaksi BBM hasil filter kosong, jangan jalankan kalkulasi
+                if df_bbm_only.empty:
+                    st.info("ℹ️ Belum ada data pemakaian BBM HPP pada filter yang Anda pilih saat ini.")
                 else:
-                    st.success("✅ Seluruh unit kendaraan beroperasi dengan pemakaian BBM yang aman dan efisien sesuai target.")
+                    df_bbm_sum = df_bbm_only.groupby('NOPOL_KEY')['DEBIT'].sum().reset_index().rename(columns={'DEBIT': 'RUPIAH_BBM'})
+                    df_km_sum = df_sales_filtered.groupby('NOPOL_KEY')['ALL ONE WAY'].sum().reset_index().rename(columns={'ALL ONE WAY': 'KM_ONE_WAY'})
                     
-                df_view_bbm = df_final_calc[['NOPOL', tipe_mobil_title, 'JENIS_BBM_CLEAN', 'RASIO_CLEAN', 'RUPIAH_BBM', 'KM_ONE_WAY', 'JARAK_REAL_PP', 'ESTIMASI_LITER', 'RASIO_LAPANGAN_KM_L', 'STATUS']].copy()
-                df_view_bbm.columns = ['NO POLISI', 'TIPE MOBIL', 'BAHAN BAKAR', 'TARGET RASIO', 'TOTAL BELANJA BBM', 'KM ONE WAY', 'JARAK REAL PP (x1.67)', 'ESTIMASI LITER', 'RASIO LAPANGAN (KM/L)', 'STATUS']
-                
-                st.dataframe(
-                    df_view_bbm.style.format({
-                        'TARGET RASIO': '{:,.1f} KM/L',
-                        'TOTAL BELANJA BBM': 'Rp {:,.0f}',
-                        'KM ONE WAY': '{:,.1f} KM',
-                        'JARAK REAL PP (x1.67)': '{:,.1f} KM',
-                        'ESTIMASI LITER': '{:,.2f} L',
-                        'RASIO LAPANGAN (KM/L)': '{:,.2f} KM/L'
-                    }),
-                    use_container_width=True, hide_index=True
-                )
+                    df_merge_calc = pd.merge(df_bbm_sum, df_km_sum, on='NOPOL_KEY', how='outer').fillna(0)
+                    df_final_calc = pd.merge(df_merge_calc, df_rules[['NOPOL', 'NOPOL_KEY', tipe_mobil_title, 'JENIS_BBM_CLEAN', 'RASIO_CLEAN', 'HARGA_CLEAN']], on='NOPOL_KEY', how='inner')
+                    
+                    if not df_final_calc.empty:
+                        df_final_calc['JARAK_REAL_PP'] = df_final_calc['KM_ONE_WAY'] * 1.67
+                        
+                        df_final_calc['ESTIMASI_LITER'] = df_final_calc.apply(
+                            lambda r: r['RUPIAH_BBM'] / r['HARGA_CLEAN'] if r['HARGA_CLEAN'] > 0 else 0, axis=1
+                        )
+                        
+                        df_final_calc['RASIO_LAPANGAN_KM_L'] = df_final_calc.apply(
+                            lambda r: r['JARAK_REAL_PP'] / r['ESTIMASI_LITER'] if r['ESTIMASI_LITER'] > 0 else 0, axis=1
+                        )
+                        
+                        df_final_calc['STATUS'] = df_final_calc.apply(
+                            lambda r: "⚠️ BOROS / OVER BUDGET" if r['RASIO_LAPANGAN_KM_L'] < r['RASIO_CLEAN'] and r['ESTIMASI_LITER'] > 0 else ("✅ AMAN" if r['ESTIMASI_LITER'] > 0 else "Data Tidak Lengkap"), axis=1
+                        )
+                        
+                        list_over = df_final_calc[df_final_calc['STATUS'] == "⚠️ BOROS / OVER BUDGET"]['NOPOL'].tolist()
+                        if list_over:
+                            st.error(f"⚠️ **PERINGATAN MONITORING BBM:** Armada berikut terdeteksi boros / tidak mencapai target efisiensi jarak rute PP: {', '.join(list_over)}")
+                        else:
+                            st.success("✅ Seluruh unit kendaraan beroperasi dengan pemakaian BBM yang aman dan efisien sesuai target.")
+                            
+                        df_view_bbm = df_final_calc[['NOPOL', tipe_mobil_title, 'JENIS_BBM_CLEAN', 'RASIO_CLEAN', 'RUPIAH_BBM', 'KM_ONE_WAY', 'JARAK_REAL_PP', 'ESTIMASI_LITER', 'RASIO_LAPANGAN_KM_L', 'STATUS']].copy()
+                        df_view_bbm.columns = ['NO POLISI', 'TIPE MOBIL', 'BAHAN BAKAR', 'TARGET RASIO', 'TOTAL BELANJA BBM', 'KM ONE WAY', 'JARAK REAL PP (x1.67)', 'ESTIMASI LITER', 'RASIO LAPANGAN (KM/L)', 'STATUS']
+                        
+                        st.dataframe(
+                            df_view_bbm.style.format({
+                                'TARGET RASIO': '{:,.1f} KM/L',
+                                'TOTAL BELANJA BBM': 'Rp {:,.0f}',
+                                'KM ONE WAY': '{:,.1f} KM',
+                                'JARAK REAL PP (x1.67)': '{:,.1f} KM',
+                                'ESTIMASI LITER': '{:,.2f} L',
+                                'RASIO LAPANGAN (KM/L)': '{:,.2f} KM/L'
+                            }),
+                            use_container_width=True, hide_index=True
+                        )
+                    else:
+                        st.info("ℹ️ Tidak ditemukan kecocokan data Nopol kendaraan pada filter ini.")
             else:
                 st.warning("Struktur kolom master data kendaraan tidak sesuai ekspektasi.")
         else:
