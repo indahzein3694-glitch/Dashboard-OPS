@@ -102,7 +102,7 @@ def load_sales_data():
         df = pd.read_csv(url)
         df.columns = [c.strip().upper() for c in df.columns]
         
-        df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], dayfirst=True, errors='coerce')
+        df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], errors='coerce', format='mixed')
         df = df.dropna(subset=['TANGGAL']).copy()
         
         if 'SALES' in df.columns:
@@ -115,9 +115,10 @@ def load_sales_data():
         df['MONTH_NUM'] = df['TANGGAL'].dt.month
         df['DAY_NUM'] = df['TANGGAL'].dt.day.astype(int)
         
-        all_one_way_col = [c for c in df.columns if 'ONE WAY' in c or 'KM' in c]
-        if all_one_way_col:
-            df['ALL_ONE_WAY'] = df[all_one_way_col[0]].astype(str).str.replace(',', '', regex=False)
+        # Deteksi dinamis kolom KM dari data Sales
+        km_cols = [c for c in df.columns if 'ONE WAY' in c or 'KM' in c or 'JARAK' in c]
+        if km_cols:
+            df['ALL_ONE_WAY'] = df[km_cols[0]].astype(str).str.replace(',', '', regex=False)
             df['ALL_ONE_WAY'] = pd.to_numeric(df['ALL_ONE_WAY'], errors='coerce').fillna(0)
         else:
             df['ALL_ONE_WAY'] = 0
@@ -226,9 +227,7 @@ if menu_pilihan == "📊 Performa Operasional ASG":
         st.markdown("<p style='color: #6c757d; font-size: 15px; margin-bottom: 25px;'>Operasional ASG • Real-time Monitoring & Analysis</p>", unsafe_allow_html=True)
         
         total_sales = df_filtered['SALES'].sum()
-        
-        km_col_name = 'ALL_ONE_WAY' if 'ALL_ONE_WAY' in df_filtered.columns else df_filtered.columns[-1]
-        total_all_one_way = df_filtered[km_col_name].sum()
+        total_all_one_way = df_filtered['ALL_ONE_WAY'].sum()
         
         total_days = df_filtered['TANGGAL'].nunique()
         if total_days > 0:
@@ -349,7 +348,7 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
             st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total Nopol Aktif</div><div class="kpi-value">{unique_nopol_count:,.0f} <span style="font-size:14px; font-weight:400; color:#6c757d;">Unit Armada</span></div></div>', unsafe_allow_html=True)
             
         # ======================================================================
-        # KONTROL BATASAN EFISIENSI BBM HPP (KM/Liter) - 100% AMAN DIKUNCI MATI
+        # PENGUNCIAN NILAI KM: PERBAIKAN DINAMIS KM ONE WAY TERBACA SEMPURNA
         # ======================================================================
         st.markdown("<div class='section-title'>⚠️ Kontrol Batasan Efisiensi BBM HPP (KM/Liter)</div>", unsafe_allow_html=True)
         
@@ -386,10 +385,9 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                 else:
                     df_bbm_sum = df_bbm_only.groupby('NOPOL_KEY')['DEBIT'].sum().reset_index().rename(columns={'DEBIT': 'RUPIAH_BBM'})
                     
-                    km_target_col = 'ALL_ONE_WAY' if 'ALL_ONE_WAY' in df_sales_filtered.columns else (df_sales_filtered.columns[-1] if not df_sales_filtered.empty else 'ALL_ONE_WAY')
-                    
-                    if km_target_col in df_sales_filtered.columns:
-                        df_km_sum = df_sales_filtered.groupby('NOPOL_KEY')[km_target_col].sum().reset_index().rename(columns={km_target_col: 'KM_ONE_WAY'})
+                    # Ambil murni kolom ALL_ONE_WAY yang sudah di-parse dengan benar di load_sales_data
+                    if 'ALL_ONE_WAY' in df_sales_filtered.columns:
+                        df_km_sum = df_sales_filtered.groupby('NOPOL_KEY')['ALL_ONE_WAY'].sum().reset_index().rename(columns={'ALL_ONE_WAY': 'KM_ONE_WAY'})
                     else:
                         df_km_sum = pd.DataFrame(columns=['NOPOL_KEY', 'KM_ONE_WAY'])
                     
