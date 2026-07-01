@@ -349,7 +349,7 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
             st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total Nopol Aktif</div><div class="kpi-value">{unique_nopol_count:,.0f} <span style="font-size:14px; font-weight:400; color:#6c757d;">Unit Armada</span></div></div>', unsafe_allow_html=True)
             
         # ======================================================================
-        # ⚠️ FIX PERMANEN KEYERROR: FORCE COLUMN INDEXING PADA HARGA BBM
+        # ⚠️ SOLUSI VALUEERROR: RENAME KOLOM SPESIFIK TANPA MERUBAH STRUKTUR TOTAL
         # ======================================================================
         st.markdown("<div class='section-title'>⚠️ Kontrol Batasan Efisiensi BBM HPP (KM/Liter)</div>", unsafe_allow_html=True)
         
@@ -367,8 +367,9 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                 df_master_working[nama_kolom_bbm] = df_master_working[nama_kolom_bbm].astype(str).str.strip().str.upper()
                 
                 df_harga_working = df_harga_live.copy()
-                # Beri nama kolom yang sangat unik dan statis agar terhindar dari tabrakan nama kolom pasca-merge
-                df_harga_working.columns = ['KEY_BBM_LIVE', 'HARGA_PER_LITER_LIVE']
+                # Hindari penggantian nama seluruh indeks (df.columns = [...]) yang rawan memicu ValueError
+                kolom_pertama_harga = df_harga_working.columns[0]
+                df_harga_working = df_harga_working.rename(columns={kolom_pertama_harga: 'KEY_BBM_LIVE'})
                 df_harga_working['KEY_BBM_LIVE'] = df_harga_working['KEY_BBM_LIVE'].astype(str).str.strip().str.upper()
                 
                 df_rules = pd.merge(df_master_working, df_harga_working, left_on=nama_kolom_bbm, right_on='KEY_BBM_LIVE', how='left')
@@ -391,8 +392,10 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                     df_final_calc = pd.merge(df_merge_calc, df_rules, on='NOPOL_KEY', how='inner')
                     
                     if not df_final_calc.empty:
-                        # Panggil kolom harga statis yang dijamin aman 100% dari KeyError
-                        df_final_calc['HARGA_BBM_RIIL'] = pd.to_numeric(df_final_calc['HARGA_PER_LITER_LIVE'], errors='coerce').fillna(0)
+                        # Ambil nilai kolom harga berdasarkan posisi urutan ke-2 di df_harga_live (Aman dari eror ganti nama)
+                        nama_asli_kolom_harga = df_harga_live.columns[1]
+                        
+                        df_final_calc['HARGA_BBM_RIIL'] = pd.to_numeric(df_final_calc[nama_asli_kolom_harga], errors='coerce').fillna(0)
                         df_final_calc['TARGET_RASIO_RIIL'] = pd.to_numeric(df_final_calc[nama_kolom_rasio], errors='coerce').fillna(0)
                         
                         df_final_calc['JARAK_REAL_PP'] = df_final_calc['KM_ONE_WAY'] * 1.67
