@@ -349,11 +349,12 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
             st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total Nopol Aktif</div><div class="kpi-value">{unique_nopol_count:,.0f} <span style="font-size:14px; font-weight:400; color:#6c757d;">Unit Armada</span></div></div>', unsafe_allow_html=True)
             
         # ======================================================================
-        # ⚠️ PROTEKSI TOTAL: KONTROL BATASAN EFISIENSI BBM HPP (ANTI-CRASH LOG)
+        # ⚠️ SOLUSI TOTAL ANTI-KEYERROR 1: DETEKSI SECARA STATIS DAN AMAN DARI LIVE DATA
         # ======================================================================
         st.markdown("<div class='section-title'>⚠️ Kontrol Batasan Efisiensi BBM HPP (KM/Liter)</div>", unsafe_allow_html=True)
         
         if not df_master_mbl.empty and not df_harga_live.empty:
+            # Cari kolom yang mengandung kata BBM atau RASIO secara dinamis dari tabel master
             bbm_col_master = [c for c in df_master_mbl.columns if 'BBM' in c or 'BAHAN' in c]
             mobil_col_master = [c for c in df_master_mbl.columns if 'MOBIL' in c or 'ARMADA' in c]
             rasio_col_master = [c for c in df_master_mbl.columns if 'RASIO' in c or 'BATAS' in c]
@@ -363,15 +364,19 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                 nama_kolom_rasio = rasio_col_master[0]
                 nama_kolom_mobil = mobil_col_master[0] if mobil_col_master else df_master_mbl.columns[2]
                 
-                df_master_working = df_master_mbl.copy()
-                df_master_working[nama_kolom_bbm] = df_master_working[nama_kolom_bbm].astype(str).str.strip().str.upper()
+                # Standarisasi data tanpa menyentuh struktur internal DataFrame asli
+                df_m_clean = df_master_mbl.copy()
+                df_m_clean[nama_kolom_bbm] = df_m_clean[nama_kolom_bbm].astype(str).str.strip().str.upper()
                 
-                df_harga_working = df_harga_live.copy()
-                kolom_pertama_harga = df_harga_working.columns[0]
-                df_harga_working = df_harga_working.rename(columns={kolom_pertama_harga: 'KEY_BBM_LIVE'})
-                df_harga_working['KEY_BBM_LIVE'] = df_harga_working['KEY_BBM_LIVE'].astype(str).str.strip().str.upper()
+                df_h_clean = df_harga_live.copy()
+                # Kasih proteksi nama kolom mati untuk lembar harga BBM
+                kolom_key_harga = df_h_clean.columns[0]
+                df_h_clean = df_h_clean.rename(columns={kolom_key_harga: 'JOIN_BBM_KEY'})
+                df_h_clean['JOIN_BBM_KEY'] = df_h_clean['JOIN_BBM_KEY'].astype(str).str.strip().str.upper()
                 
-                df_rules = pd.merge(df_master_working, df_harga_working, left_on=nama_kolom_bbm, right_on='KEY_BBM_LIVE', how='left')
+                # Satukan tabel rules secara menyeluruh
+                df_rules = pd.merge(df_m_clean, df_h_clean, left_on=nama_kolom_bbm, right_on='JOIN_BBM_KEY', how='left')
+                
                 df_bbm_only = df_exp_filtered[df_exp_filtered['NAMA'].str.upper().str.contains("BAHAN BAKAR MINYAK HPP", na=False)]
                 
                 if df_bbm_only.empty:
@@ -390,18 +395,19 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                     df_final_calc = pd.merge(df_merge_calc, df_rules, on='NOPOL_KEY', how='inner')
                     
                     if not df_final_calc.empty:
-                        # --- PROTEKSI UTAMA DARI KEYERROR: 1 ---
-                        # Cek secara dinamis jika jumlah kolom di sheet harga kurang dari 2, buat kolom fallback aman
+                        # --- PROTEKSI TOTAL AMAN DARI KEYERROR: 1 ---
+                        # Kita ambil kolom harga live menggunakan urutan posisi kolom ke-2 dari dataframe asli df_harga_live
                         if len(df_harga_live.columns) >= 2:
-                            nama_asli_kolom_harga = df_harga_live.columns[1]
-                            df_final_calc['HARGA_BBM_RIIL'] = pd.to_numeric(df_final_calc[nama_asli_kolom_harga], errors='coerce').fillna(0)
-                        else:
-                            # Fallback otomatis mencocokkan baris harga jika skrip google sheets pecah kolom
-                            kolom_sisa = [c for c in df_final_calc.columns if c not in ['NOPOL_KEY', 'RUPIAH_BBM', 'KM_ONE_WAY', 'KEY_BBM_LIVE', nama_kolom_bbm, nama_kolom_rasio, nama_kolom_mobil]]
-                            if kolom_sisa:
-                                df_final_calc['HARGA_BBM_RIIL'] = pd.to_numeric(df_final_calc[kolom_sisa[0]], errors='coerce').fillna(0)
+                            kolom_harga_asli = df_harga_live.columns[1]
+                            # Jika nama kolom berubah pasca merge, cari kolom yang nilainya berupa nominal harga di df_final_calc
+                            if kolom_harga_asli in df_final_calc.columns:
+                                df_final_calc['HARGA_BBM_RIIL'] = pd.to_numeric(df_final_calc[kolom_harga_asli], errors='coerce').fillna(0)
                             else:
-                                df_final_calc['HARGA_BBM_RIIL'] = 0
+                                # Jika terpotong oleh Pandas, deteksi kolom sisa otomatis
+                                kolom_sisa = [c for c in df_final_calc.columns if c not in ['NOPOL_KEY', 'RUPIAH_BBM', 'KM_ONE_WAY', 'JOIN_BBM_KEY', nama_kolom_bbm, nama_kolom_rasio, nama_kolom_mobil]]
+                                df_final_calc['HARGA_BBM_RIIL'] = pd.to_numeric(df_final_calc[kolom_sisa[0]], errors='coerce').fillna(0) if kolom_sisa else 0
+                        else:
+                            df_final_calc['HARGA_BBM_RIIL'] = 0
                         
                         df_final_calc['TARGET_RASIO_RIIL'] = pd.to_numeric(df_final_calc[nama_kolom_rasio], errors='coerce').fillna(0)
                         
