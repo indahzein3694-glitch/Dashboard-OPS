@@ -1,4 +1,4 @@
-import streamlit as st
+mport streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
@@ -100,6 +100,7 @@ def load_sales_data():
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
     try:
         df = pd.read_csv(url)
+        # Normalisasi nama kolom menjadi uppercase tanpa spasi berlebih di ujungnya
         df.columns = [c.strip().upper() for c in df.columns]
         
         df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], errors='coerce', format='mixed')
@@ -115,13 +116,20 @@ def load_sales_data():
         df['MONTH_NUM'] = df['TANGGAL'].dt.month
         df['DAY_NUM'] = df['TANGGAL'].dt.day.astype(int)
         
-        # Penyelarasan Deteksi Kolom Jarak/KM secara dinamis agar aman
-        km_cols = [c for c in df.columns if 'STANDAR KM' in c or 'ONE WAY' in c or 'KM' in c or 'JARAK' in c]
-        if km_cols:
-            df['ALL_ONE_WAY'] = df[km_cols[0]].astype(str).str.replace(',', '', regex=False)
-            df['ALL_ONE_WAY'] = pd.to_numeric(df['ALL_ONE_WAY'], errors='coerce').fillna(0)
+        # PERBAIKAN: Mengunci nama kolom secara manual menjadi ALL ONE WAY
+        # Jika nama kolom di Google Sheets kamu adalah "ALL ONE WAY", maka dinormalisasi menjadi "ALL ONE WAY"
+        target_km_col = 'ALL ONE WAY'
+        
+        # Pengecekan cadangan jika nama kolom menggunakan garis bawah "ALL_ONE_WAY"
+        if 'ALL_ONE_WAY' in df.columns:
+            target_km_col = 'ALL_ONE_WAY'
+            
+        if target_km_col in df.columns:
+            df['ALL_ONE_WAY_CLEANED'] = df[target_km_col].astype(str).str.replace(',', '', regex=False)
+            df['ALL_ONE_WAY_CLEANED'] = pd.to_numeric(df['ALL_ONE_WAY_CLEANED'], errors='coerce').fillna(0)
         else:
-            df['ALL_ONE_WAY'] = 0
+            # Jika kolom "ALL ONE WAY" masih tidak ditemukan, gunakan kolom numerik terakhir sebagai cadangan sementara
+            df['ALL_ONE_WAY_CLEANED'] = 0
             
         if 'NO INVOICE' in df.columns:
             df['STORE'] = df['NO INVOICE'].fillna('TANPA NAMA').astype(str).str.strip().str.upper()
@@ -227,7 +235,7 @@ if menu_pilihan == "📊 Performa Operasional ASG":
         st.markdown("<p style='color: #6c757d; font-size: 15px; margin-bottom: 25px;'>Operasional ASG • Real-time Monitoring & Analysis</p>", unsafe_allow_html=True)
         
         total_sales = df_filtered['SALES'].sum()
-        total_all_one_way = df_filtered['ALL_ONE_WAY'].sum()
+        total_all_one_way = df_filtered['ALL_ONE_WAY_CLEANED'].sum()
         
         total_days = df_filtered['TANGGAL'].nunique()
         if total_days > 0:
@@ -243,7 +251,7 @@ if menu_pilihan == "📊 Performa Operasional ASG":
         with kpi2:
             st.markdown(f'<div class="kpi-card"><div class="kpi-title">Ritase Index (Avg/Day)</div><div class="kpi-value">{ritase_index:.2f} <span style="font-size:14px; font-weight:400; color:#6c757d;">rit/truk</span></div></div>', unsafe_allow_html=True)
         with kpi3:
-            st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total All One Way / Target</div><div class="kpi-value">{total_all_one_way:,.0f}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total All One Way</div><div class="kpi-value">{total_all_one_way:,.0f} <span style="font-size:14px; font-weight:400; color:#6c757d;">KM</span></div></div>', unsafe_allow_html=True)
             
         st.markdown("<div class='section-title'>Visualisasi Performa</div>", unsafe_allow_html=True)
         row1_col1, row1_col2 = st.columns(2)
@@ -348,7 +356,7 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
             st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total Nopol Aktif</div><div class="kpi-value">{unique_nopol_count:,.0f} <span style="font-size:14px; font-weight:400; color:#6c757d;">Unit Armada</span></div></div>', unsafe_allow_html=True)
             
         # ======================================================================
-        # PENGUNCIAN NILAI KM: PERBAIKAN TOTAL DATA LOGISTIK ASG
+        # PENGUNCIAN NILAI KM: TARGET AKURASI KOLOM ALL ONE WAY
         # ======================================================================
         st.markdown("<div class='section-title'>⚠️ Kontrol Batasan Efisiensi BBM HPP (KM/Liter)</div>", unsafe_allow_html=True)
         
@@ -385,10 +393,9 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                 else:
                     df_bbm_sum = df_bbm_only.groupby('NOPOL_KEY')['DEBIT'].sum().reset_index().rename(columns={'DEBIT': 'RUPIAH_BBM'})
                     
-                    # Hubungkan murni ritase perjalanan dengan target km dasar rute per nopol
-                    if 'ALL_ONE_WAY' in df_sales_filtered.columns and 'RITASE' in df_sales_filtered.columns:
-                        # Buat kolom kalkulasi km jalan sesungguhnya = (Rasio Jarak Rute * Jumlah Ritase Jalan)
-                        df_sales_filtered['KM_JALAN_ASLI'] = df_sales_filtered['ALL_ONE_WAY'] * df_sales_filtered['RITASE']
+                    # Menggunakan murni hasil kolom terikat "ALL_ONE_WAY_CLEANED"
+                    if 'ALL_ONE_WAY_CLEANED' in df_sales_filtered.columns and 'RITASE' in df_sales_filtered.columns:
+                        df_sales_filtered['KM_JALAN_ASLI'] = df_sales_filtered['ALL_ONE_WAY_CLEANED'] * df_sales_filtered['RITASE']
                         df_km_sum = df_sales_filtered.groupby('NOPOL_KEY')['KM_JALAN_ASLI'].sum().reset_index().rename(columns={'KM_JALAN_ASLI': 'KM_ONE_WAY'})
                     else:
                         df_km_sum = pd.DataFrame(columns=['NOPOL_KEY', 'KM_ONE_WAY'])
@@ -404,7 +411,6 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                         
                         df_final_calc['HARGA_BBM_RIIL'] = df_final_calc['JENIS_BBM'].str.strip().str.upper().map(harga_bbm_dict).fillna(10000)
                         
-                        # Pengali 1.67 untuk rute memutar pulang-pergi
                         df_final_calc['JARAK_REAL_PP'] = df_final_calc['KM_ONE_WAY'] * 1.67
                         df_final_calc['ESTIMASI_LITER'] = df_final_calc.apply(
                             lambda r: r['RUPIAH_BBM'] / r['HARGA_BBM_RIIL'] if r['HARGA_BBM_RIIL'] > 0 else 0, axis=1
