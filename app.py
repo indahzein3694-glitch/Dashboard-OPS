@@ -349,7 +349,7 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
             st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total Nopol Aktif</div><div class="kpi-value">{unique_nopol_count:,.0f} <span style="font-size:14px; font-weight:400; color:#6c757d;">Unit Armada</span></div></div>', unsafe_allow_html=True)
             
         # ======================================================================
-        # ⚠️ SOLUSI ABSOLUT 100% BEBAS DARI KEYERROR: PEMETAAN SERTA MESTI AMAN
+        # KONTROL BATASAN EFISIENSI BBM HPP (KM/Liter) - 100% AMAN DIKUNCI MATI
         # ======================================================================
         st.markdown("<div class='section-title'>⚠️ Kontrol Batasan Efisiensi BBM HPP (KM/Liter)</div>", unsafe_allow_html=True)
         
@@ -363,13 +363,11 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                 nama_kolom_rasio = rasio_col_master[0]
                 nama_kolom_mobil = mobil_col_master[0] if mobil_col_master else df_master_mbl.columns[2]
                 
-                # Buat dictionary pemetaan statis agar kebal dari kegagalan merge Pandas
                 map_nopol_ke_nopol_asli = dict(zip(df_master_mbl['NOPOL_KEY'], df_master_mbl['NOPOL']))
                 map_nopol_ke_mobil = dict(zip(df_master_mbl['NOPOL_KEY'], df_master_mbl[nama_kolom_mobil]))
                 map_nopol_ke_bbm = dict(zip(df_master_mbl['NOPOL_KEY'], df_master_mbl[nama_kolom_bbm]))
                 map_nopol_ke_rasio = dict(zip(df_master_mbl['NOPOL_KEY'], pd.to_numeric(df_master_mbl[nama_kolom_rasio], errors='coerce').fillna(0)))
                 
-                # Buat dictionary pricing dari live sheet
                 harga_bbm_dict = {'SOLAR': 6800, 'PERTALITE': 10000, 'PERTAMAX': 12500, 'PERTAMINA DEX': 13150, 'DEXLITE': 12700}
                 if not df_harga_live.empty and len(df_harga_live.columns) >= 2:
                     try:
@@ -396,21 +394,16 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                         df_km_sum = pd.DataFrame(columns=['NOPOL_KEY', 'KM_ONE_WAY'])
                     
                     df_final_calc = pd.merge(df_bbm_sum, df_km_sum, on='NOPOL_KEY', how='outer').fillna(0)
-                    
-                    # Saring murni yang terdaftar di master saja menggunakan dictionary map
                     df_final_calc = df_final_calc[df_final_calc['NOPOL_KEY'].isin(map_nopol_ke_nopol_asli.keys())].copy()
                     
                     if not df_final_calc.empty:
-                        # Isi kolom visualisasi langsung dengan metode map() - Garansi Bebas KeyError
                         df_final_calc['NOPOL_ASLI'] = df_final_calc['NOPOL_KEY'].map(map_nopol_ke_nopol_asli)
                         df_final_calc['TIPE_MOBIL'] = df_final_calc['NOPOL_KEY'].map(map_nopol_ke_mobil)
                         df_final_calc['JENIS_BBM'] = df_final_calc['NOPOL_KEY'].map(map_nopol_ke_bbm)
                         df_final_calc['TARGET_RASIO_RIIL'] = df_final_calc['NOPOL_KEY'].map(map_nopol_ke_rasio)
                         
-                        # Ambil harga bbm riil
                         df_final_calc['HARGA_BBM_RIIL'] = df_final_calc['JENIS_BBM'].str.strip().str.upper().map(harga_bbm_dict).fillna(10000)
                         
-                        # Kalkulasi efisiensi BBM
                         df_final_calc['JARAK_REAL_PP'] = df_final_calc['KM_ONE_WAY'] * 1.67
                         df_final_calc['ESTIMASI_LITER'] = df_final_calc.apply(
                             lambda r: r['RUPIAH_BBM'] / r['HARGA_BBM_RIIL'] if r['HARGA_BBM_RIIL'] > 0 else 0, axis=1
@@ -458,15 +451,8 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
         else:
             st.warning("Data Master Kendaraan gagal dimuat.")
             
-        with st.sidebar:
-            st.markdown("### 📋 Live Monitor Harga BBM")
-            if not df_harga_live.empty and len(df_harga_live.columns) >= 2:
-                st.table(df_harga_live.iloc[:, :2].rename(columns={df_harga_live.columns[0]: 'Tipe BBM', df_harga_live.columns[1]: 'Harga/Liter'}))
-            else:
-                st.info("Menggunakan basis data harga BBM riil bawaan.")
-            
         # ======================================================================
-        # KEMBALI KE POSISI GRAFIK & LIST SEMULA
+        # ANALISIS GRAFIK BIAYA & DATA LIST PENGELUARAN
         # ======================================================================
         st.markdown("<br><hr style='border: 0.5px solid rgba(235, 94, 40, 0.1);'><br>", unsafe_allow_html=True)
 
