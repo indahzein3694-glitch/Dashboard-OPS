@@ -330,6 +330,20 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
         if sel_exp_dates:
             df_exp_filtered = df_exp_filtered[df_exp_filtered['DAY_NUM'].isin(sel_exp_dates)]
             df_sales_filtered = df_sales_filtered[df_sales_filtered['DAY_NUM'].isin(sel_exp_dates)]
+       if sel_exp_stores:
+    # 1. Saring data pengeluaran seperti biasa
+    df_exp_filtered = df_exp_filtered[df_exp_filtered['STORE'].isin(sel_exp_stores)]
+    
+    # 2. Cari Nopol dari MASTER KENDARAAN yang terdaftar di Store terpilih tersebut
+    # Kita cari kolom yang mengandung nama 'STORE' di master kendaraan
+    store_col_master = [c for c in df_master_mbl.columns if 'STORE' in c or 'TOKO' in c]
+    if store_col_master:
+        nama_kolom_store_master = store_col_master[0]
+        # Ambil semua NOPOL_KEY yang fix milik Store terpilih di Master Kendaraan
+        nopol_dari_master = df_master_mbl[df_master_mbl[nama_kolom_store_master].isin(sel_exp_stores)]['NOPOL_KEY'].unique()
+        
+        # 3. Saring data kilometer di sheet LAPORAN berdasarkan daftar Nopol dari master tadi
+        df_sales_filtered = df_sales_filtered[df_sales_filtered['NOPOL_KEY'].isin(nopol_dari_master)]
         if sel_exp_namas:
             df_exp_filtered = df_exp_filtered[df_exp_filtered['NAMA'].isin(sel_exp_namas)]
             
