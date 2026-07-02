@@ -330,20 +330,23 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
         if sel_exp_dates:
             df_exp_filtered = df_exp_filtered[df_exp_filtered['DAY_NUM'].isin(sel_exp_dates)]
             df_sales_filtered = df_sales_filtered[df_sales_filtered['DAY_NUM'].isin(sel_exp_dates)]
-       if sel_exp_stores:
-    # 1. Saring data pengeluaran seperti biasa
-    df_exp_filtered = df_exp_filtered[df_exp_filtered['STORE'].isin(sel_exp_stores)]
-    
-    # 2. Cari Nopol dari MASTER KENDARAAN yang terdaftar di Store terpilih tersebut
-    # Kita cari kolom yang mengandung nama 'STORE' di master kendaraan
-    store_col_master = [c for c in df_master_mbl.columns if 'STORE' in c or 'TOKO' in c]
-    if store_col_master:
-        nama_kolom_store_master = store_col_master[0]
-        # Ambil semua NOPOL_KEY yang fix milik Store terpilih di Master Kendaraan
-        nopol_dari_master = df_master_mbl[df_master_mbl[nama_kolom_store_master].isin(sel_exp_stores)]['NOPOL_KEY'].unique()
-        
-        # 3. Saring data kilometer di sheet LAPORAN berdasarkan daftar Nopol dari master tadi
-        df_sales_filtered = df_sales_filtered[df_sales_filtered['NOPOL_KEY'].isin(nopol_dari_master)]
+            
+        # ----------------------------------------------------------------------
+        # FIXED: JALUR HUBUNGAN FILTER TOKO VIA MASTER KENDARAAN
+        # ----------------------------------------------------------------------
+        if sel_exp_stores:
+            # 1. Saring data pengeluaran berdasarkan Toko terpilih
+            df_exp_filtered = df_exp_filtered[df_exp_filtered['STORE'].isin(sel_exp_stores)]
+            
+            # 2. Cari kolom yang mengandung kata 'STORE' atau 'TOKO' di Master Kendaraan
+            store_col_master = [c for c in df_master_mbl.columns if 'STORE' in c or 'TOKO' in c]
+            if store_col_master:
+                nama_kolom_store_master = store_col_master[0]
+                # 3. Ambil daftar Nopol dari Master Kendaraan yang terikat dengan Toko terpilih
+                nopol_dari_master = df_master_mbl[df_master_mbl[nama_kolom_store_master].isin(sel_exp_stores)]['NOPOL_KEY'].unique()
+                # 4. Saring data kilometer di sheet LAPORAN berdasarkan Nopol basis tersebut
+                df_sales_filtered = df_sales_filtered[df_sales_filtered['NOPOL_KEY'].isin(nopol_dari_master)]
+                
         if sel_exp_namas:
             df_exp_filtered = df_exp_filtered[df_exp_filtered['NAMA'].isin(sel_exp_namas)]
             
@@ -360,7 +363,7 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
             st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total Nopol Aktif</div><div class="kpi-value">{unique_nopol_count:,.0f} <span style="font-size:14px; font-weight:400; color:#6c757d;">Unit Armada</span></div></div>', unsafe_allow_html=True)
             
         # ======================================================================
-        # KONTROL BATASAN EFISIENSI BBM HPP (KM/Liter) - 100% AMAN DIKUNCI MATI
+        # KONTROL BATASAN EFISIENSI BBM HPP (KM/Liter)
         # ======================================================================
         st.markdown("<div class='section-title'>⚠️ Kontrol Batasan Efisiensi BBM HPP (KM/Liter)</div>", unsafe_allow_html=True)
         
@@ -397,10 +400,9 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                 else:
                     df_bbm_sum = df_bbm_only.groupby('NOPOL_KEY')['DEBIT'].sum().reset_index().rename(columns={'DEBIT': 'RUPIAH_BBM'})
                     
-                    km_target_col = 'ALL_ONE_WAY' if 'ALL_ONE_WAY' in df_sales_filtered.columns else (df_sales_filtered.columns[-1] if not df_sales_filtered.empty else 'ALL_ONE_WAY')
-                    
-                    if km_target_col in df_sales_filtered.columns:
-                        df_km_sum = df_sales_filtered.groupby('NOPOL_KEY')[km_target_col].sum().reset_index().rename(columns={km_target_col: 'KM_ONE_WAY'})
+                    # Mengambil kalkulasi total kilometer dari data sales_filtered yang sudah dijembatani
+                    if 'ALL_ONE_WAY' in df_sales_filtered.columns:
+                        df_km_sum = df_sales_filtered.groupby('NOPOL_KEY')['ALL_ONE_WAY'].sum().reset_index().rename(columns={'ALL_ONE_WAY': 'KM_ONE_WAY'})
                     else:
                         df_km_sum = pd.DataFrame(columns=['NOPOL_KEY', 'KM_ONE_WAY'])
                     
