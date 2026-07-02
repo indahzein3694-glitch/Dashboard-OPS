@@ -327,9 +327,24 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
         if sel_exp_months:
             df_exp_filtered = df_exp_filtered[df_exp_filtered['MONTH_NAME'].isin(sel_exp_months)]
             df_sales_filtered = df_sales_filtered[df_sales_filtered['MONTH_NAME'].isin(sel_exp_months)]
-        if sel_exp_dates:
-            df_exp_filtered = df_exp_filtered[df_exp_filtered['DAY_NUM'].isin(sel_exp_dates)]
-            df_sales_filtered = df_sales_filtered[df_sales_filtered['DAY_NUM'].isin(sel_exp_dates)]
+        # ----------------------------------------------------------------------
+        # FIXED TOTAL: JALUR HUBUNGAN FILTER TOKO YANG 100% AKURAT SESUAI PIVOT
+        # ----------------------------------------------------------------------
+        if sel_exp_stores:
+            # 1. Saring data pengeluaran berdasarkan Toko terpilih
+            df_exp_filtered = df_exp_filtered[df_exp_filtered['STORE'].isin(sel_exp_stores)]
+            
+            # 2. Saring data kilometer LAPORAN langsung berdasarkan kolom STORE miliknya sendiri
+            # Ini memastikan rute store lain tidak ikut terhitung secara kumulatif
+            if 'STORE' in df_sales_filtered.columns:
+                df_sales_filtered = df_sales_filtered[df_sales_filtered['STORE'].isin(sel_exp_stores)]
+            else:
+                # Backup pengaman menggunakan jembatan Nopol Master Kendaraan jika kolom STORE di sales kosong
+                store_col_master = [c for c in df_master_mbl.columns if 'STORE' in c or 'TOKO' in c]
+                if store_col_master:
+                    nama_kolom_store_master = store_col_master[0]
+                    nopol_dari_master = df_master_mbl[df_master_mbl[nama_kolom_store_master].isin(sel_exp_stores)]['NOPOL_KEY'].unique()
+                    df_sales_filtered = df_sales_filtered[df_sales_filtered['NOPOL_KEY'].isin(nopol_dari_master)]
             
         # ----------------------------------------------------------------------
         # FIXED: JALUR HUBUNGAN FILTER TOKO VIA MASTER KENDARAAN
