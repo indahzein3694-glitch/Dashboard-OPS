@@ -83,7 +83,7 @@ def load_master_data_kendaraan():
         df_m = pd.read_csv(url_master)
         df_m.columns = [c.strip().upper() for c in df_m.columns]
         if 'NOPOL' in df_m.columns:
-            df_m['NOPOL_KEY'] = df_m['NOPOL'].astype(str).str.replace(' ', '', regex=False).str.replace('-', '', regex=False).str.upper()
+            df_m['NOPOL_KEY'] = df_m['NOPOL'].astype(str).str.replace(r'[\s\-_]', '', regex=True).str.upper().str.strip()
             
         df_h = pd.read_csv(url_harga)
         df_h.columns = [c.strip().upper() for c in df_h.columns]
@@ -134,7 +134,7 @@ def load_sales_data():
         df = df[df['STORE'] != 'NAN'].copy()
             
         df['NOPOL'] = df['NOPOL'].fillna('TANPA NOPOL').astype(str).str.strip()
-        df['NOPOL_KEY'] = df['NOPOL'].str.replace(' ', '', regex=False).str.replace('-', '', regex=False).str.upper()
+        df['NOPOL_KEY'] = df['NOPOL'].astype(str).str.replace(r'[\s\-_]', '', regex=True).str.upper().str.strip()
         return df
     except Exception as e:
         return pd.DataFrame()
@@ -167,7 +167,7 @@ def load_expense_data():
         df = df[df['STORE'] != 'NAN'].copy()
         
         df['NOPOL'] = df['NOPOL'].fillna('TANPA NOPOL').astype(str).str.strip()
-        df['NOPOL_KEY'] = df['NOPOL'].str.replace(' ', '', regex=False).str.replace('-', '', regex=False).str.upper()
+        df['NOPOL_KEY'] = df['NOPOL'].astype(str).str.replace(r'[\s\-_]', '', regex=True).str.upper().str.strip()
         df['NAMA'] = df['NAMA'].fillna('TANPA NAMA').astype(str).str.strip()
         return df
     except Exception as e:
@@ -322,9 +322,9 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
         df_sales_filtered = df_sales_for_km.copy()
         
         # ----------------------------------------------------------------------
-        # FIXED TOTAL: REVISI LOGIKA FILTER SESUAI STRUKTUR JALUR DATA KHOLIDAH
+        # SINKRONISASI JALUR FILTER DATA YANG BENAR
         # ----------------------------------------------------------------------
-        # 1. Filter Waktu (Tahun, Bulan, Tanggal) memotong KEDUA SHEET karena keduanya punya tanggal
+        # 1. Filter Waktu memotong KEDUA SHEET karena keduanya memiliki kolom Tanggal
         if sel_exp_years:
             df_exp_filtered = df_exp_filtered[df_exp_filtered['YEAR'].isin(sel_exp_years)]
             df_sales_filtered = df_sales_filtered[df_sales_filtered['YEAR'].isin(sel_exp_years)]
@@ -335,7 +335,7 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
             df_exp_filtered = df_exp_filtered[df_exp_filtered['DAY_NUM'].isin(sel_exp_dates)]
             df_sales_filtered = df_sales_filtered[df_sales_filtered['DAY_NUM'].isin(sel_exp_dates)]
             
-        # 2. Filter STORE HANYA memotong sheet PENGELUARAN (karena di LAPORAN tidak ada hubungan ke STORE)
+        # 2. Filter STORE HANYA memotong sheet PENGELUARAN (karena LAPORAN tidak ada nama Store)
         if sel_exp_stores:
             df_exp_filtered = df_exp_filtered[df_exp_filtered['STORE'].isin(sel_exp_stores)]
             
@@ -390,17 +390,17 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                 if df_bbm_only.empty:
                     st.info("ℹ️ Belum ada data pemakaian BBM HPP pada filter yang Anda pilih saat ini.")
                 else:
-                    # Menjumlahkan pengeluaran rupiah BBM per nopol dari data pengeluaran yang telah terfilter (Waktu + Toko)
+                    # 1. Total Belanja BBM per Nopol dari data pengeluaran terfilter (Waktu + Toko)
                     df_bbm_sum = df_bbm_only.groupby('NOPOL_KEY')['DEBIT'].sum().reset_index().rename(columns={'DEBIT': 'RUPIAH_BBM'})
                     
-                    # Mengambil kilometer total murni dari sheet LAPORAN berdasarkan filter Waktu
+                    # 2. Total Kilometer murni per Nopol dari sheet LAPORAN (Hanya terfilter Waktu)
                     if 'ALL_ONE_WAY' in df_sales_filtered.columns:
                         df_km_sum = df_sales_filtered.groupby('NOPOL_KEY')['ALL_ONE_WAY'].sum().reset_index().rename(columns={'ALL_ONE_WAY': 'KM_ONE_WAY'})
                     else:
                         df_km_sum = pd.DataFrame(columns=['NOPOL_KEY', 'KM_ONE_WAY'])
                     
-                    # MERGE OLEH NOPOL: Menghubungkan Nopol yang bertransaksi di pengeluaran toko/waktu tersebut dengan data KM aslinya
-                    df_final_calc = pd.merge(df_bbm_sum, df_km_sum, on='NOPOL_KEY', how='inner').fillna(0)
+                    # 3. HUBUNGKAN DATA MENGGUNAKAN LEFT JOIN BERDASARKAN NOPOL
+                    df_final_calc = pd.merge(df_bbm_sum, df_km_sum, on='NOPOL_KEY', how='left').fillna(0)
                     df_final_calc = df_final_calc[df_final_calc['NOPOL_KEY'].isin(map_nopol_ke_nopol_asli.keys())].copy()
                     
                     if not df_final_calc.empty:
