@@ -348,7 +348,7 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
             df_exp_filtered = df_exp_filtered[df_exp_filtered['DAY_NUM'].isin(sel_exp_dates)]
             df_sales_filtered = df_sales_filtered[df_sales_filtered['DAY_NUM'].isin(sel_exp_dates)]
             
-        # 2. Filter STORE HANYA memotong sheet PENGELUARAN
+        # 2. Filter STORE memotong sheet PENGELUARAN
         if sel_exp_stores:
             df_exp_filtered = df_exp_filtered[df_exp_filtered['STORE'].isin(sel_exp_stores)]
             
@@ -403,13 +403,21 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                 if df_bbm_only.empty:
                     st.info("ℹ️ Belum ada data pemakaian BBM HPP pada filter yang Anda pilih saat ini.")
                 else:
+                    # 1. Total Belanja BBM per Nopol dari pengeluaran
                     df_bbm_sum = df_bbm_only.groupby('NOPOL_KEY')['DEBIT'].sum().reset_index().rename(columns={'DEBIT': 'RUPIAH_BBM'})
                     
-                    if 'ALL_ONE_WAY' in df_sales_filtered.columns:
-                        df_km_sum = df_sales_filtered.groupby('NOPOL_KEY')['ALL_ONE_WAY'].sum().reset_index().rename(columns={'ALL_ONE_WAY': 'KM_ONE_WAY'})
+                    # 2. KUNCI UTAMA: Ambil daftar Nopol yang MEMILIKI TRANSAKSI di Store/Filter saat ini
+                    nopol_aktif_di_filter = df_bbm_sum['NOPOL_KEY'].unique()
+                    
+                    # 3. Saring sheet LAPORAN HANYA untuk Nopol yang aktif di filter saat ini
+                    df_sales_kunci = df_sales_filtered[df_sales_filtered['NOPOL_KEY'].isin(nopol_aktif_di_filter)]
+                    
+                    if 'ALL_ONE_WAY' in df_sales_kunci.columns:
+                        df_km_sum = df_sales_kunci.groupby('NOPOL_KEY')['ALL_ONE_WAY'].sum().reset_index().rename(columns={'ALL_ONE_WAY': 'KM_ONE_WAY'})
                     else:
                         df_km_sum = pd.DataFrame(columns=['NOPOL_KEY', 'KM_ONE_WAY'])
                     
+                    # 4. Hubungkan data BBM dengan KM (LEFT JOIN)
                     df_final_calc = pd.merge(df_bbm_sum, df_km_sum, on='NOPOL_KEY', how='left').fillna(0)
                     df_final_calc = df_final_calc[df_final_calc['NOPOL_KEY'].isin(map_nopol_ke_nopol_asli.keys())].copy()
                     
