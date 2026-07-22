@@ -102,7 +102,7 @@ def load_sales_data():
         df = pd.read_csv(url)
         df.columns = [c.strip().upper() for c in df.columns]
         
-        # Strip Tanggal Teks "Kamis, 01/Jan/2026"
+        # Format Tanggal di Sheet LAPORAN ("Kamis, 01/Jan/2026")
         if 'TANGGAL' in df.columns:
             df['TANGGAL'] = df['TANGGAL'].astype(str).str.strip()
             df['TANGGAL'] = df['TANGGAL'].str.replace(r'^[A-Za-z\s]+,\s*', '', regex=True)
@@ -136,6 +136,7 @@ def load_sales_data():
         else:
             df['ALL_ONE_WAY'] = 0
             
+        # PENTING: KOLOM 'NO INVOICE' DI SHEET LAPORAN ADALAH NAMA STORE
         if 'NO INVOICE' in df.columns:
             df['STORE'] = df['NO INVOICE'].fillna('TANPA NAMA').astype(str).str.strip().str.upper()
         elif 'STORE' in df.columns:
@@ -337,7 +338,10 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
         df_exp_filtered = df_expense.copy()
         df_sales_filtered = df_sales_for_km.copy()
         
-        # 1. Filter Waktu memotong KEDUA SHEET
+        # ----------------------------------------------------------------------
+        # SINKRONISASI FILTER PRESISI PADA KEDUA SHEET
+        # ----------------------------------------------------------------------
+        # 1. Filter Waktu (Tahun, Bulan, Tanggal) memotong KEDUA SHEET
         if sel_exp_years:
             df_exp_filtered = df_exp_filtered[df_exp_filtered['YEAR'].isin(sel_exp_years)]
             df_sales_filtered = df_sales_filtered[df_sales_filtered['YEAR'].isin(sel_exp_years)]
@@ -348,9 +352,10 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
             df_exp_filtered = df_exp_filtered[df_exp_filtered['DAY_NUM'].isin(sel_exp_dates)]
             df_sales_filtered = df_sales_filtered[df_sales_filtered['DAY_NUM'].isin(sel_exp_dates)]
             
-        # 2. Filter STORE memotong sheet PENGELUARAN
+        # 2. Filter STORE MEMOTONG KEDUA SHEET (Menggunakan STORE di Pengeluaran & NO INVOICE di Laporan)
         if sel_exp_stores:
             df_exp_filtered = df_exp_filtered[df_exp_filtered['STORE'].isin(sel_exp_stores)]
+            df_sales_filtered = df_sales_filtered[df_sales_filtered['STORE'].isin(sel_exp_stores)]
             
         if sel_exp_namas:
             df_exp_filtered = df_exp_filtered[df_exp_filtered['NAMA'].isin(sel_exp_namas)]
@@ -403,21 +408,16 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                 if df_bbm_only.empty:
                     st.info("ℹ️ Belum ada data pemakaian BBM HPP pada filter yang Anda pilih saat ini.")
                 else:
-                    # 1. Total Belanja BBM per Nopol dari pengeluaran
+                    # 1. Total Belanja BBM per Nopol dari sheet Pengeluaran (Sudah terpotong Waktu + Store)
                     df_bbm_sum = df_bbm_only.groupby('NOPOL_KEY')['DEBIT'].sum().reset_index().rename(columns={'DEBIT': 'RUPIAH_BBM'})
                     
-                    # 2. KUNCI UTAMA: Ambil daftar Nopol yang MEMILIKI TRANSAKSI di Store/Filter saat ini
-                    nopol_aktif_di_filter = df_bbm_sum['NOPOL_KEY'].unique()
-                    
-                    # 3. Saring sheet LAPORAN HANYA untuk Nopol yang aktif di filter saat ini
-                    df_sales_kunci = df_sales_filtered[df_sales_filtered['NOPOL_KEY'].isin(nopol_aktif_di_filter)]
-                    
-                    if 'ALL_ONE_WAY' in df_sales_kunci.columns:
-                        df_km_sum = df_sales_kunci.groupby('NOPOL_KEY')['ALL_ONE_WAY'].sum().reset_index().rename(columns={'ALL_ONE_WAY': 'KM_ONE_WAY'})
+                    # 2. Total KM per Nopol dari sheet LAPORAN (SUDAH TERPOTONG PRESISI KHUSUS STORE YANG SAMA!)
+                    if 'ALL_ONE_WAY' in df_sales_filtered.columns:
+                        df_km_sum = df_sales_filtered.groupby('NOPOL_KEY')['ALL_ONE_WAY'].sum().reset_index().rename(columns={'ALL_ONE_WAY': 'KM_ONE_WAY'})
                     else:
                         df_km_sum = pd.DataFrame(columns=['NOPOL_KEY', 'KM_ONE_WAY'])
                     
-                    # 4. Hubungkan data BBM dengan KM (LEFT JOIN)
+                    # 3. Hubungkan data BBM dengan KM (LEFT JOIN)
                     df_final_calc = pd.merge(df_bbm_sum, df_km_sum, on='NOPOL_KEY', how='left').fillna(0)
                     df_final_calc = df_final_calc[df_final_calc['NOPOL_KEY'].isin(map_nopol_ke_nopol_asli.keys())].copy()
                     
@@ -446,14 +446,12 @@ elif menu_pilihan == "💸 Pengeluaran Operasional":
                         col_notif1, col_notif2 = st.columns(2)
                         
                         with col_notif1:
-                            # Notifikasi Top 3 Pemakaian BBM Terbanyak
                             top_bbm = df_final_calc.sort_values(by='RUPIAH_BBM', ascending=False).head(3)
                             st.warning("⛽ **TOP 3 PEMAKAIAN BBM TERBANYAK (BIAYA TINGGI):**")
                             for idx, row in top_bbm.iterrows():
                                 st.write(f"• **{row['NOPOL_ASLI']}** ({row['TIPE_MOBIL']}): **Rp {row['RUPIAH_BBM']:,.0f}** (~{row['ESTIMASI_LITER']:.1f} Liter)")
                                 
                         with col_notif2:
-                            # Notifikasi Armada Boros (Over Budget)
                             list_boros = df_final_calc[df_final_calc['STATUS'] == "⚠️ BOROS / OVER BUDGET"]
                             if not list_boros.empty:
                                 st.error(f"🚨 **PERINGATAN BOROS ({len(list_boros)} Armada Over Budget):**")
